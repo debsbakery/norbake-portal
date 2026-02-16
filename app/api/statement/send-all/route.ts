@@ -32,14 +32,14 @@ export async function POST(request: NextRequest) {
 
     for (const customer of customers) {
       try {
-        console.log(\Would send statement to \ (\)\)
-        console.log(\Balance: \$\\)
+        console.log(`Would send statement to ${customer.email} (${customer.business_name})`)
+        console.log(`Balance: $${customer.balance}`)
         
         sent++
       } catch (error: any) {
-        console.error(\Failed to send statement to \:\, error)
+        console.error(`Failed to send statement to ${customer.email}:`, error)
         failed++
-        errors.push(\\: \\)
+        errors.push(`${customer.email}: ${error.message}`)
       }
     }
 
