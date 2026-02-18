@@ -1,5 +1,4 @@
-export const dynamic = 'force-dynamic'
-
+"use client"
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -59,7 +58,7 @@ export default function DirectInvoicePage() {
     const { data } = await supabase
       .from("products")
       .select("*")
-      .eq("is_available", true)
+      .eq("available", true)
       .order("name");
     
     setProducts(data || []);
