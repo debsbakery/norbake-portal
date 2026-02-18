@@ -33,7 +33,7 @@ interface InvoiceItem {
 
 export default function DirectInvoicePage() {
   const router = useRouter();
-  const supabase = createClient();
+  const [supabase, setSupabase] = useState<any>(null);
   
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -50,11 +50,18 @@ export default function DirectInvoicePage() {
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
+  setSupabase(createClient());
+}, []);
+
+useEffect(() => {
+  if (supabase) {
     loadProducts();
     loadCustomers();
-  }, []);
+  }
+}, [supabase]);
 
   const loadProducts = async () => {
+     if (!supabase) return;  // ✅ Add this line
     const { data } = await supabase
       .from("products")
       .select("*")
@@ -344,6 +351,16 @@ export default function DirectInvoicePage() {
   };
 
   const totals = calculateTotals();
+if (!supabase) {
+  return (
+    <div className="container mx-auto px-4 py-8 flex justify-center items-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+    </div>
+  );
+}
+
+
+    // ... your existing JSX
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
