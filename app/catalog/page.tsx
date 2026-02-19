@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = 'force-dynamic'
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -14,7 +16,7 @@ interface ProductWithPricing extends Product {
 
 export default function CatalogPage() {
   const router = useRouter();
-  const supabase = createClient();
+  const [supabase, setSupabase] = useState<any>(null);
 
   const [products, setProducts] = useState<ProductWithPricing[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -25,7 +27,12 @@ export default function CatalogPage() {
   const [showOnlyShadowItems, setShowOnlyShadowItems] = useState(false);
   const [shadowProductIds, setShadowProductIds] = useState<Set<string>>(new Set());
 
-  // ✅ Shadow loader — defined outside useEffect so ProductCard can call it too
+  // Initialize Supabase
+  useEffect(() => {
+    setSupabase(createClient());
+  }, []);
+
+  // Shadow loader
   const loadShadowProductIds = async () => {
     try {
       const res = await fetch("/api/shadow-orders");
@@ -47,14 +54,16 @@ export default function CatalogPage() {
     }
   };
 
-  // ✅ Single useEffect — no duplicates
+  // Load products and cart
   useEffect(() => {
+    if (!supabase) return;
+
     const fetchProducts = async () => {
       try {
         const { data, error: fetchError } = await supabase
           .from("products")
           .select("*")
-          .eq("is_available", true);
+          .eq("available", true);
 
         if (fetchError) {
           setError(fetchError.message);
@@ -69,7 +78,7 @@ export default function CatalogPage() {
         }
 
         // Fetch customer-specific pricing
-        const productIds = data.map((p) => p.id);
+const productIds = data.map((p: any) => p.id);
         const pricingRes = await fetch("/api/pricing", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -83,8 +92,7 @@ export default function CatalogPage() {
         }
 
         const pricingData = await pricingRes.json();
-
-        const productsWithPricing = data.map((product) => ({
+const productsWithPricing = data.map((product: any) => ({
           ...product,
           customerPrice:
             pricingData.pricing[product.id]?.price ||
@@ -163,6 +171,14 @@ export default function CatalogPage() {
   });
 
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  if (!supabase) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -318,7 +334,7 @@ export default function CatalogPage() {
 }
 
 // ═══════════════════════════════════════════
-// ProductCard Component (WITH IMAGE SUPPORT)
+// ProductCard Component
 // ═══════════════════════════════════════════
 function ProductCard({
   product,
