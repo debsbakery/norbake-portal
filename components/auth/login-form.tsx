@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -10,12 +10,19 @@ export function LoginForm() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [supabase, setSupabase] = useState<any>(null);  // ✅ Changed
   
   const router = useRouter();
-  const supabase = createClient();
+
+  // ✅ Initialize Supabase in useEffect
+  useEffect(() => {
+    setSupabase(createClient());
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!supabase) return;  // ✅ Guard clause
+    
     setLoading(true);
     setMessage(null);
 
@@ -53,16 +60,29 @@ export function LoginForm() {
     }
   };
 
+  // ✅ Show loading state while initializing
+  if (!supabase) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #FEE7E9 0%, #E6F5F0 100%)' }}>
+        <div className="w-full max-w-md bg-white rounded-lg shadow-xl p-8">
+          <div className="flex justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #FEE7E9 0%, #E6F5F0 100%)' }}>
       <div className="w-full max-w-md bg-white rounded-lg shadow-xl p-8">
         {/* Logo and Header */}
         <div className="text-center mb-6">
           <img 
-  src="/logo.svg"
-  alt="Deb's Bakery" 
-  className="h-40 w-auto mx-auto mb-4"
-/>
+            src="/logo.svg"
+            alt="Deb's Bakery" 
+            className="h-40 w-auto mx-auto mb-4"
+          />
           <h2 className="text-2xl font-bold mb-1">
             <span style={{ color: '#CE1126' }}>Deb's</span>{" "}
             <span style={{ color: '#006A4E' }}>Bakery</span>
