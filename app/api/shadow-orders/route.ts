@@ -1,13 +1,5 @@
- export const dynamic = 'force-dynamic'
-
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-
-export async function GET(request: NextRequest) {
-  const supabase = await createClient()  // Inside function
-  
-  // ... rest of code
-
 
 // Helper to create service client (bypasses RLS)
 async function createServiceClient() {
@@ -31,13 +23,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
 
-    const supabase = await createServiceClient(); // Use service client for admin access
+    const supabase = await createServiceClient();
 
     let targetCustomerId = customerId;
 
-    // If no customerId provided, try to get from authenticated user
     if (!targetCustomerId) {
-      // Import regular client for user auth
       const { createClient: createRegularClient } = await import('@/lib/supabase/server');
       const regularSupabase = await createRegularClient();
       
@@ -47,7 +37,6 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
 
-      // Get customer ID from user
       const { data: customer } = await supabase
         .from('customers')
         .select('id')
@@ -61,7 +50,6 @@ export async function GET(request: NextRequest) {
       targetCustomerId = customer.id;
     }
 
-    // Fetch shadow orders with product details
     const { data: shadowOrders, error } = await supabase
       .from('shadow_orders')
       .select(`
@@ -117,14 +105,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { product_id, productId, default_quantity = 1 } = body;
 
-    // Support both product_id and productId (your catalog uses productId)
     const finalProductId = product_id || productId;
 
     if (!finalProductId) {
       return NextResponse.json({ error: 'product_id required' }, { status: 400 });
     }
 
-    // Get customer ID
     const { data: customer } = await serviceSupabase
       .from('customers')
       .select('id')
@@ -135,7 +121,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    // Check if already exists
     const { data: existing } = await serviceSupabase
       .from('shadow_orders')
       .select('id')
@@ -147,7 +132,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Product already in favorites' }, { status: 400 });
     }
 
-    // Get next display order
     const { data: maxOrder } = await serviceSupabase
       .from('shadow_orders')
       .select('display_order')
@@ -158,7 +142,6 @@ export async function POST(request: NextRequest) {
 
     const nextOrder = (maxOrder?.display_order || 0) + 1;
 
-    // Insert
     const { data: newFavorite, error } = await serviceSupabase
       .from('shadow_orders')
       .insert({
