@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
       .from('standing_orders')
       .select(`
         id,
-        delivery_day,
+        delivery_days,
         customer_id,
         customer:customers(id, business_name),
         items:standing_order_items(
@@ -247,7 +247,7 @@ export async function GET(request: NextRequest) {
 
       // Find standing orders for this day
       standingOrders?.forEach((so: any) => {
-        if (so.delivery_day === dayOfWeek) {
+        if (so.delivery_days === dayOfWeek) {
           // Only add if customer hasn't placed a confirmed order
           if (!customersForecastedPerDate[dateStr].has(so.customer_id)) {
             customersForecastedPerDate[dateStr].set(so.customer_id, 'standing_order');

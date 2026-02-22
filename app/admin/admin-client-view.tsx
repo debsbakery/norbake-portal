@@ -7,16 +7,21 @@ import {
   RefreshCw,
   Truck,
   DollarSign,
-  FileText
+  FileText,
+  ShoppingCart,
+  ChefHat,
+  Receipt,
+  Copy,
 } from 'lucide-react';
 
 // Import views
 import OrdersView from './orders-view';
 import StandingOrdersView from './standing-orders-view';
-import ContractPricingPage from './pricing/page';  // ✅ Added
+import ContractPricingPage from './pricing/page';
+import ProductsView from './products-view';
 
 export default function AdminClientView() {
-  const [activeTab, setActiveTab] = useState<'orders' | 'standing-orders' | 'pricing'>('orders');  // ✅ Updated type
+  const [activeTab, setActiveTab] = useState<'orders' | 'standing-orders' | 'pricing' | 'products'>('orders');
   const supabase = createClient();
 
   return (
@@ -36,32 +41,47 @@ export default function AdminClientView() {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              {/* Production Button */}
               <a
                 href="/admin/production"
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md transition-all"
                 style={{ backgroundColor: '#006A4E' }}
               >
-                <Package className="h-4 w-4" />
+                <ChefHat className="h-4 w-4" />
                 Production
               </a>
-<a
-  href="/admin/batch-invoice"
-  className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md transition-all"
-  style={{ backgroundColor: '#CE1126' }}
->
-  <FileText className="h-4 w-4" />
-  Batch Invoice
-</a>
+
+              {/* Batch Invoice Button */}
+              <a
+                href="/admin/batch-invoice"
+                className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md transition-all"
+                style={{ backgroundColor: '#CE1126' }}
+              >
+                <FileText className="h-4 w-4" />
+                Batch Invoice
+              </a>
+
+              {/* Direct Invoice Button */}
               <a
                 href="/admin/direct-invoice"
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md transition-all"
                 style={{ backgroundColor: '#CE1126' }}
               >
-                <FileText className="h-4 w-4" />
+                <Receipt className="h-4 w-4" />
                 Direct Invoice
               </a>
 
+              {/* Repeat Order Button */}
+              <a
+                href="/admin/customers/repeat-order-search"
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 shadow-md transition-all"
+              >
+                <Copy className="h-4 w-4" />
+                Repeat Order
+              </a>
+
+              {/* Routes Button */}
               <a
                 href="/admin/routes"
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md transition-all"
@@ -71,6 +91,7 @@ export default function AdminClientView() {
                 Routes
               </a>
 
+              {/* AR Dashboard Button */}
               <a
                 href="/admin/ar"
                 className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 shadow-md transition-all"
@@ -78,11 +99,21 @@ export default function AdminClientView() {
                 <DollarSign className="h-4 w-4" />
                 AR Dashboard
               </a>
+
+              {/* Record Payment Button */}
+              <a
+                href="/admin/payments/record"
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 shadow-md transition-all"
+              >
+                <DollarSign className="h-4 w-4" />
+                Record Payment
+              </a>
             </div>
           </div>
 
           {/* Tab Navigation */}
           <div className="flex gap-2 overflow-x-auto pb-0">
+            {/* Orders Tab */}
             <button
               onClick={() => setActiveTab('orders')}
               className={`flex items-center gap-2 px-6 py-3 font-semibold text-sm whitespace-nowrap transition-all border-b-2 ${
@@ -95,6 +126,7 @@ export default function AdminClientView() {
               Orders
             </button>
 
+            {/* Standing Orders Tab */}
             <button
               onClick={() => setActiveTab('standing-orders')}
               className={`flex items-center gap-2 px-6 py-3 font-semibold text-sm whitespace-nowrap transition-all border-b-2 ${
@@ -107,7 +139,20 @@ export default function AdminClientView() {
               Standing Orders
             </button>
 
-            {/* ✅ Fixed Pricing Tab */}
+            {/* Products Tab */}
+            <button
+              onClick={() => setActiveTab('products')}
+              className={`flex items-center gap-2 px-6 py-3 font-semibold text-sm whitespace-nowrap transition-all border-b-2 ${
+                activeTab === 'products'
+                  ? 'border-green-600 text-green-700 bg-green-50'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Products
+            </button>
+
+            {/* Contract Pricing Tab */}
             <button
               onClick={() => setActiveTab('pricing')}
               className={`flex items-center gap-2 px-6 py-3 font-semibold text-sm whitespace-nowrap transition-all border-b-2 ${
@@ -127,7 +172,8 @@ export default function AdminClientView() {
       <div className="container mx-auto px-4 py-6">
         {activeTab === 'orders' && <OrdersView supabase={supabase} />}
         {activeTab === 'standing-orders' && <StandingOrdersView supabase={supabase} />}
-        {activeTab === 'pricing' && <ContractPricingPage />}  {/* ✅ Simplified */}
+        {activeTab === 'products' && <ProductsView />}
+        {activeTab === 'pricing' && <ContractPricingPage />}
       </div>
     </div>
   );

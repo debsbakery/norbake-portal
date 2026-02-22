@@ -45,6 +45,10 @@ export default function ProductionForecastView() {
   const [days, setDays] = useState(7);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [includeHistorical, setIncludeHistorical] = useState(true);
+  
+  // Product code range filtering
+  const [codeRangeStart, setCodeRangeStart] = useState<number>(1000);
+  const [codeRangeEnd, setCodeRangeEnd] = useState<number>(5000);
 
   useEffect(() => {
     fetchForecast();
@@ -74,6 +78,23 @@ export default function ProductionForecastView() {
       month: 'short',
       day: 'numeric',
     });
+  };
+
+  // Filter products by code range
+  const filterByProductCode = (products: any) => {
+    return Object.values(products).filter((product: any) => {
+      const code = product.product_number;
+      if (!code) return false;
+      return code >= codeRangeStart && code <= codeRangeEnd;
+    });
+  };
+
+  // Get filtered product count for summary
+  const getFilteredProductCount = () => {
+    return productSummary.filter(p => {
+      const code = p.product_number;
+      return code && code >= codeRangeStart && code <= codeRangeEnd;
+    }).length;
   };
 
   if (loading) {
@@ -119,6 +140,43 @@ export default function ProductionForecastView() {
             </select>
           </div>
 
+          {/* Product Code Range Filter */}
+          <div className="flex-1 min-w-[280px]">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Product Code Range
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="1000"
+                max="5000"
+                value={codeRangeStart}
+                onChange={(e) => setCodeRangeStart(parseInt(e.target.value) || 1000)}
+                className="w-20 px-2 py-2 border border-gray-300 rounded-md text-sm"
+                placeholder="1000"
+              />
+              <span className="text-gray-600">to</span>
+              <input
+                type="number"
+                min="1000"
+                max="5000"
+                value={codeRangeEnd}
+                onChange={(e) => setCodeRangeEnd(parseInt(e.target.value) || 5000)}
+                className="w-20 px-2 py-2 border border-gray-300 rounded-md text-sm"
+                placeholder="5000"
+              />
+              <button
+                onClick={() => {
+                  setCodeRangeStart(1000);
+                  setCodeRangeEnd(5000);
+                }}
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap"
+              >
+                Reset Range
+              </button>
+            </div>
+          </div>
+
           <div className="flex items-center gap-3 px-4 py-2 border border-gray-300 rounded-md">
             <input
               type="checkbox"
@@ -145,6 +203,13 @@ export default function ProductionForecastView() {
         {includeHistorical && (
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-800">
             ℹ️ <strong>Historical forecasting enabled:</strong> System will predict orders for customers based on their ordering patterns from the last 4 weeks.
+          </div>
+        )}
+
+        {/* Filter info display */}
+        {(codeRangeStart !== 1000 || codeRangeEnd !== 5000) && (
+          <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md text-sm text-yellow-800">
+            📊 <strong>Filtered view:</strong> Showing only products with codes {codeRangeStart} - {codeRangeEnd}
           </div>
         )}
       </div>
@@ -239,6 +304,14 @@ export default function ProductionForecastView() {
               else if (hasStanding) bgColor = 'bg-blue-50';
               else if (hasHistorical) bgColor = 'bg-orange-50';
 
+              // Filter products for this day
+              const filteredProducts = filterByProductCode(day.products);
+
+              // Skip day if no products match filter
+              if (filteredProducts.length === 0) {
+                return null;
+              }
+
               return (
                 <div key={day.date} className="border-b last:border-b-0">
                   <div className={`p-4 ${bgColor}`}>
@@ -264,7 +337,12 @@ export default function ProductionForecastView() {
                             </span>
                           )}
                           <span className="text-gray-600">
-                            • {day.totalItems} items total
+                            • {filteredProducts.reduce((sum: number, p: any) => sum + p.quantity, 0)} items
+                            {filteredProducts.length !== Object.keys(day.products).length && (
+                              <span className="text-yellow-700 ml-1">
+                                (filtered from {Object.keys(day.products).length} products)
+                              </span>
+                            )}
                           </span>
                         </div>
                       </div>
@@ -281,7 +359,7 @@ export default function ProductionForecastView() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {Object.values(day.products)
+                        {filteredProducts
                           .sort((a: any, b: any) => a.product_number - b.product_number)
                           .map((product: any) => (
                             <TableRow key={product.product_id}>
@@ -348,7 +426,7 @@ export default function ProductionForecastView() {
         <div className="p-6 border-b">
           <h2 className="text-xl font-bold flex items-center gap-2">
             <TrendingUp className="h-5 w-5" style={{ color: '#CE1126' }} />
-            Product Summary ({productSummary.length} products)
+            Product Summary ({getFilteredProductCount()} of {productSummary.length} products)
           </h2>
         </div>
         <div className="overflow-x-auto">
@@ -368,39 +446,45 @@ export default function ProductionForecastView() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {productSummary.map((product) => (
-                <TableRow key={product.product_id}>
-                  <TableCell className="font-mono text-sm">
-                    #{product.product_number}
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <p className="font-medium">{product.product_name}</p>
-                      <p className="text-xs text-gray-500">{product.category}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-bold">
-                    {product.total_quantity} {product.unit}
-                  </TableCell>
-                  <TableCell className="text-right text-green-700 font-semibold">
-                    {product.confirmed_quantity}
-                  </TableCell>
-                  <TableCell className="text-right text-blue-700">
-                    {product.standing_order_quantity}
-                  </TableCell>
-                  {includeHistorical && (
-                    <TableCell className="text-right text-orange-700">
-                      {product.historical_quantity}
+              {productSummary
+                .filter((product) => {
+                  const code = product.product_number;
+                  if (!code) return false;
+                  return code >= codeRangeStart && code <= codeRangeEnd;
+                })
+                .map((product) => (
+                  <TableRow key={product.product_id}>
+                    <TableCell className="font-mono text-sm">
+                      #{product.product_number}
                     </TableCell>
-                  )}
-                  <TableCell className="text-right">
-                    {product.days_ordered} / {days}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {product.avg_daily.toFixed(1)} {product.unit}
-                  </TableCell>
-                </TableRow>
-              ))}
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{product.product_name}</p>
+                        <p className="text-xs text-gray-500">{product.category}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-bold">
+                      {product.total_quantity} {product.unit}
+                    </TableCell>
+                    <TableCell className="text-right text-green-700 font-semibold">
+                      {product.confirmed_quantity}
+                    </TableCell>
+                    <TableCell className="text-right text-blue-700">
+                      {product.standing_order_quantity}
+                    </TableCell>
+                    {includeHistorical && (
+                      <TableCell className="text-right text-orange-700">
+                        {product.historical_quantity}
+                      </TableCell>
+                    )}
+                    <TableCell className="text-right">
+                      {product.days_ordered} / {days}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {product.avg_daily.toFixed(1)} {product.unit}
+                    </TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         </div>

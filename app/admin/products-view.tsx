@@ -1,16 +1,222 @@
 'use client';
 
-import { SupabaseClient } from '@supabase/supabase-js';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import { ShoppingCart } from 'lucide-react';
+import type { Product } from '@/lib/types';
 
-export default function ProductsView({ supabase }: { supabase: SupabaseClient }) {
+export default function ProductsView() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isEditing, setIsEditing] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Partial<Product>>({});
+  const [loading, setLoading] = useState(true);
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  async function loadProducts() {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('product_number', { ascending: true, nullsFirst: false });
+
+    if (error) {
+      console.error('Error loading products:', error);
+    } else {
+      setProducts(data || []);
+    }
+    setLoading(false);
+  }
+
+  async function saveProduct(product: Partial<Product>) {
+    // Validate product_number (1000-5000 range)
+    if (product.product_number !== null && product.product_number !== undefined) {
+      if (product.product_number < 1000 || product.product_number > 5000) {
+        alert('Product code must be between 1000 and 5000');
+        return;
+      }
+
+      // Check if code is already used
+      const { data: existing } = await supabase
+        .from('products')
+        .select('id')
+        .eq('product_number', product.product_number)
+        .neq('id', product.id || '')
+        .single();
+
+      if (existing) {
+        alert(`Product code ${product.product_number} is already in use`);
+        return;
+      }
+    }
+
+    const { error } = await supabase
+      .from('products')
+      .update({
+        name: product.name,
+        description: product.description,
+        category: product.category,
+        price: product.price,
+        product_number: product.product_number,
+        unit: product.unit,
+      })
+      .eq('id', product.id!);
+
+    if (error) {
+      console.error('Error saving product:', error);
+      alert('Failed to save product');
+    } else {
+      setIsEditing(null);
+      loadProducts();
+    }
+  }
+
+  if (loading) {
+    return <div className="p-8">Loading products...</div>;
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-6">
         <ShoppingCart className="h-6 w-6 text-green-600" />
-        <h2 className="text-2xl font-bold">Products Management</h2>
+        <h2 className="text-2xl font-bold">Product Management</h2>
       </div>
-      <p className="text-gray-600">Product management interface coming soon...</p>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Code
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Name
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Category
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Unit
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Price
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {products.map((product) => (
+              <tr key={product.id}>
+                {isEditing === product.id ? (
+                  <>
+                    <td className="px-6 py-4">
+                      <input
+                        type="number"
+                        min="1000"
+                        max="5000"
+                        value={editForm.product_number || ''}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, product_number: parseInt(e.target.value) || null })
+                        }
+                        className="w-24 border border-gray-300 rounded px-2 py-1"
+                        placeholder="1000-5000"
+                      />
+                    </td>
+                    <td className="px-6 py-4">
+                      <input
+                        type="text"
+                        value={editForm.name || ''}
+                        onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                        className="w-full border border-gray-300 rounded px-2 py-1"
+                      />
+                    </td>
+                    <td className="px-6 py-4">
+                      <input
+                        type="text"
+                        value={editForm.category || ''}
+                        onChange={(e) => setEditForm({ ...editForm, category: e.target.value || null })}
+                        className="w-full border border-gray-300 rounded px-2 py-1"
+                      />
+                    </td>
+                    <td className="px-6 py-4">
+                      <input
+                        type="text"
+                        value={editForm.unit || ''}
+                        onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })}
+                        className="w-20 border border-gray-300 rounded px-2 py-1"
+                        placeholder="ea, kg"
+                      />
+                    </td>
+                    <td className="px-6 py-4">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editForm.price || ''}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, price: parseFloat(e.target.value) })
+                        }
+                        className="w-24 border border-gray-300 rounded px-2 py-1"
+                      />
+                    </td>
+                    <td className="px-6 py-4 text-right space-x-2">
+                      <button
+                        onClick={() => saveProduct(editForm)}
+                        className="text-green-600 hover:text-green-900 font-medium"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setIsEditing(null)}
+                        className="text-gray-600 hover:text-gray-900"
+                      >
+                        Cancel
+                      </button>
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm font-mono font-semibold text-gray-900">
+                        {product.product_number || '—'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm text-gray-500">{product.category || '—'}</span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm text-gray-500">{product.unit}</span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm text-gray-900">
+                        ${product.price.toFixed(2)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <button
+                        onClick={() => {
+                          setIsEditing(product.id);
+                          setEditForm(product);
+                        }}
+                        className="text-[#006A4E] hover:text-[#004d38] font-medium"
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -259,29 +259,38 @@ export default function OrdersView({ supabase }: { supabase: SupabaseClient }) {
                       {formatDateTime(order.created_at)}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-1 justify-center">
-                        <a
-                          href={`/api/invoice/${order.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-md text-white hover:opacity-90"
-                          style={{ backgroundColor: '#CE1126' }}
-                        >
-                          <FileDown className="h-4 w-4" />
-                          Invoice
-                        </a>
-                        <a
-                          href={`/api/packing-slip/${order.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-md text-white hover:opacity-90"
-                          style={{ backgroundColor: '#006A4E' }}
-                        >
-                          <Package className="h-4 w-4" />
-                          Slip
-                        </a>
-                      </div>
-                    </td>
+  <div className="flex gap-1 justify-center">
+    {/* NEW: Edit Button */}
+    <a
+      href={`/admin/orders/${order.id}/edit`}
+      className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+    >
+      <FileText className="h-4 w-4" />
+      Edit
+    </a>
+    
+    <a
+      href={`/api/invoice/${order.id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-md text-white hover:opacity-90"
+      style={{ backgroundColor: '#CE1126' }}
+    >
+      <FileDown className="h-4 w-4" />
+      Invoice
+    </a>
+    <a
+      href={`/api/packing-slip/${order.id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-md text-white hover:opacity-90"
+      style={{ backgroundColor: '#006A4E' }}
+    >
+      <Package className="h-4 w-4" />
+      Slip
+    </a>
+  </div>
+</td>
                   </tr>
                 ))
               ) : (

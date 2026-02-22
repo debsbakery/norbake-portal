@@ -1,11 +1,10 @@
-export const dynamic = 'force-dynamic' 
+export const dynamic = 'force-dynamic';
+
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { checkAdmin } from "@/lib/auth";
 import { ArrowLeft, Package } from "lucide-react";
 import Link from "next/link";
 import ProductionForecastView from "./production-forecast-view";
-
 
 export default async function ProductionDashboardPage() {
   const isAdmin = await checkAdmin();

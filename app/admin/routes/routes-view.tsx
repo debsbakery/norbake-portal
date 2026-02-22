@@ -31,6 +31,7 @@ export default function RoutesView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeOnly, setActiveOnly] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]); // NEW
 
   useEffect(() => {
     fetchRoutes();
@@ -98,8 +99,8 @@ export default function RoutesView() {
 
   return (
     <div>
-      {/* Filter Toggle */}
-      <div className="mb-6 flex items-center gap-4">
+      {/* Filter Toggle & Date Selector */}
+      <div className="mb-6 flex items-center gap-6">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -109,6 +110,18 @@ export default function RoutesView() {
           />
           <span className="text-sm font-medium">Show active routes only</span>
         </label>
+        
+        {/* Date Selector for Run Sheets */}
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700">Run Sheet Date:</label>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="px-3 py-1 border border-gray-300 rounded-md text-sm"
+          />
+        </div>
+
         <span className="text-sm text-gray-600">
           ({routes.length} route{routes.length !== 1 ? 's' : ''})
         </span>
@@ -202,21 +215,36 @@ export default function RoutesView() {
               </div>
 
               {/* Actions */}
-              <div className="p-4 border-t flex gap-2">
+              <div className="p-4 border-t flex gap-2 flex-wrap">
                 <Link
                   href={`/admin/routes/${route.route_number}`}
-                  className="flex-1 text-center px-3 py-2 rounded-md text-white text-sm font-semibold hover:opacity-90"
+                  className="flex-1 min-w-[100px] text-center px-3 py-2 rounded-md text-white text-sm font-semibold hover:opacity-90"
                   style={{ backgroundColor: "#006A4E" }}
                 >
                   <Edit className="h-4 w-4 inline mr-1" />
                   Edit
                 </Link>
-                <Link
-                  href={`/admin/routes/${route.route_number}/run-sheet`}
-                  className="flex-1 text-center px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
+                
+                {/* Full Run Sheet */}
+                <a
+                  href={`/api/routes/${route.route_number}/run-sheet?date=${selectedDate}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 min-w-[120px] text-center px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
                 >
-                  📋 Run Sheet
-                </Link>
+                  📄 Full Sheet
+                </a>
+
+                {/* NEW: Condensed Run Sheet */}
+                <a
+                  href={`/api/routes/${route.route_number}/condensed-sheet?date=${selectedDate}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 min-w-[120px] text-center px-3 py-2 rounded-md bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700"
+                >
+                  📋 Condensed
+                </a>
+                
                 {route.active && (
                   <button
                     onClick={() => handleDeactivate(route.route_number)}
