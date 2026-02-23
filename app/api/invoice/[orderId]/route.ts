@@ -3,10 +3,15 @@ import { generateInvoice } from "@/lib/invoice";
 import { NextRequest, NextResponse } from "next/server";
 import { OrderWithItems } from "@/lib/types";
 
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ orderId: string }> }
 ) {
+  const startTime = Date.now();
+  
   try {
     const { orderId } = await context.params;
     
@@ -14,31 +19,58 @@ export async function GET(
 
     const supabase = await createClient();
 
-    // ✅ First check if order exists at all
-    const { data: orderCheck, error: checkError } = await supabase
+    // ✅ Single optimized query
+    const { data: order, error } = await supabase
       .from("orders")
-      .select("id, status, invoice_number")
+      .select(`
+        id,
+        status,
+        invoice_number,
+        customer_email,
+        customer_business_name,
+        customer_address,
+        customer_abn,
+        delivery_date,
+        total_amount,
+        notes,
+        created_at,
+        order_items (
+          product_name,
+          quantity,
+          unit_price,
+          subtotal,
+          gst_applicable
+        ),
+        customers (
+          business_name,
+          email,
+          address,
+          abn
+        )
+      `)
       .eq("id", orderId)
       .maybeSingle();
 
-    console.log("🔍 Order check result:", orderCheck);
+    console.log(`⏱️ Query: ${Date.now() - startTime}ms`);
 
-    if (checkError) {
-      console.error("🔴 Database check error:", checkError);
+    if (error) {
+      console.error("🔴 Database error:", error);
       return NextResponse.json({ 
         error: 'Database error',
-        details: checkError.message 
+        details: error.message 
       }, { status: 500 });
     }
 
-    if (!orderCheck) {
-      console.error("🔴 Order not found in database:", orderId);
+    if (!order) {
+      console.error("🔴 Order not found:", orderId);
       return new NextResponse(
         `
         <!DOCTYPE html>
         <html>
           <head>
             <title>Invoice Not Found</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
               body { 
                 font-family: Arial, sans-serif; 
@@ -85,40 +117,10 @@ export async function GET(
       );
     }
 
-    console.log("✅ Order exists, fetching full details...");
-
-    // ✅ Now get full order with items
-    const { data: order, error } = await supabase
-      .from("orders")
-      .select(`
-        *,
-        order_items (*),
-        customers (
-          business_name,
-          email,
-          address,
-          abn
-        )
-      `)
-      .eq("id", orderId)
-      .single();
-
-    if (error) {
-      console.error("🔴 Error fetching order details:", error);
-      return NextResponse.json({ 
-        error: 'Failed to fetch order details',
-        details: error.message 
-      }, { status: 500 });
-    }
-
-    if (!order) {
-      console.error("🔴 Order details not found");
-      return NextResponse.json({ error: "Order details not found" }, { status: 404 });
-    }
-
     console.log("✅ Order found with", order.order_items?.length || 0, "items");
-    console.log("✅ Customer:", order.customers);
 
+    const pdfStartTime = Date.now();
+    
     // ✅ Generate PDF
     const pdf = await generateInvoice({
       order: order as OrderWithItems,
@@ -131,7 +133,7 @@ export async function GET(
       },
     });
 
-    console.log("✅ PDF generated");
+    console.log(`⏱️ PDF generation: ${Date.now() - pdfStartTime}ms`);
 
     const invoiceNumber = order.invoice_number 
       ? String(order.invoice_number).padStart(6, '0')
@@ -139,16 +141,19 @@ export async function GET(
 
     const pdfBuffer = Buffer.from(pdf.output('arraybuffer'));
     
+    console.log(`⏱️ Total time: ${Date.now() - startTime}ms`);
+    
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="invoice-${invoiceNumber}.pdf"`,
+        'Cache-Control': 'public, max-age=3600', // ✅ Cache for 1 hour
       },
     });
 
   } catch (error: any) {
-    console.error("🔴 Invoice generation error:", error);
-    console.error("🔴 Error stack:", error.stack);
+    console.error("🔴 Invoice error:", error);
+    console.error(`⏱️ Failed after: ${Date.now() - startTime}ms`);
     
     return new NextResponse(
       `
@@ -156,6 +161,7 @@ export async function GET(
       <html>
         <head>
           <title>Invoice Generation Error</title>
+          <meta charset="utf-8">
           <style>
             body { 
               font-family: Arial, sans-serif; 
@@ -172,14 +178,15 @@ export async function GET(
               margin: 20px 0;
               text-align: left;
               font-family: monospace;
-              font-size: 14px;
+              font-size: 12px;
+              overflow-x: auto;
             }
           </style>
         </head>
         <body>
           <h1>⚠️ Invoice Generation Failed</h1>
           <p>An error occurred while generating the invoice:</p>
-          <div class="error">${error.message}<br><br>${error.stack?.split('\n').slice(0, 5).join('\n')}</div>
+          <div class="error">${error.message}</div>
           <p>Please contact support:</p>
           <p>📧 ${process.env.BAKERY_EMAIL || 'debs_bakery@outlook.com'}</p>
         </body>
