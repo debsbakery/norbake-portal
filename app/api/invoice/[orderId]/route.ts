@@ -132,7 +132,7 @@ export async function GET(
 
     const pdfStartTime = Date.now();
     
-    // ✅ Generate PDF - now with correct type
+    // ✅ Generate PDF
     const pdf = await generateInvoice({
       order: order as OrderWithItems,
       bakeryInfo: {
@@ -154,10 +154,16 @@ export async function GET(
     
     console.log(`⏱️ Total time: ${Date.now() - startTime}ms`);
     
+    // ✅ Support download parameter
+    const url = new URL(request.url);
+    const shouldDownload = url.searchParams.get('download') === 'true';
+    
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="invoice-${invoiceNumber}.pdf"`,
+        'Content-Disposition': shouldDownload
+          ? `attachment; filename="invoice-${invoiceNumber}.pdf"`
+          : `inline; filename="invoice-${invoiceNumber}.pdf"`,
         'Cache-Control': 'public, max-age=3600',
       },
     });
