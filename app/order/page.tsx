@@ -25,6 +25,11 @@ export default function OrderPage() {
   const [notes, setNotes] = useState("");
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [businessName, setBusinessName] = useState("");
+  
+  // ✅ ADD: PO and Docket state
+  const [purchaseOrderNumber, setPurchaseOrderNumber] = useState("");
+  const [docketNumber, setDocketNumber] = useState("");
+  
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -141,7 +146,7 @@ export default function OrderPage() {
         business_name: businessName || null,
       });
 
-      // Create order
+      // ✅ CREATE ORDER with PO and Docket numbers
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .insert({
@@ -152,6 +157,8 @@ export default function OrderPage() {
           customer_abn: customer?.abn || null,
           delivery_date: deliveryDate.toISOString().split("T")[0],
           notes: notes || null,
+          purchase_order_number: purchaseOrderNumber || null,  // ✅ ADD
+          docket_number: docketNumber || null,                 // ✅ ADD
           total_amount: orderTotals.total,
           status: "pending",
           source: "online",
@@ -185,11 +192,10 @@ export default function OrderPage() {
 
       if (itemsError) throw itemsError;
 
-      // ✅ Send confirmation emails via API route (server-side email sending)
+      // ✅ Send confirmation emails via API route
       try {
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
         
-        // Call a new API route that will handle email sending server-side
         await fetch(`${siteUrl}/api/orders/send-confirmation`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -302,6 +308,39 @@ export default function OrderPage() {
                     )}
                   </div>
                 )}
+
+                {/* ✅ Purchase Order & Docket Numbers */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label htmlFor="po_number" className="block text-sm font-medium text-gray-700 mb-1">
+                      Purchase Order Number (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      id="po_number"
+                      name="purchase_order_number"
+                      placeholder="e.g., PO-2024-1234"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                      value={purchaseOrderNumber}
+                      onChange={(e) => setPurchaseOrderNumber(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="docket_number" className="block text-sm font-medium text-gray-700 mb-1">
+                      Docket Number (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      id="docket_number"
+                      name="docket_number"
+                      placeholder="e.g., DOC-5678"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                      value={docketNumber}
+                      onChange={(e) => setDocketNumber(e.target.value)}
+                    />
+                  </div>
+                </div>
 
                 {/* Delivery Date */}
                 <div className="mb-4">

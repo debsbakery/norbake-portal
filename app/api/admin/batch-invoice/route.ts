@@ -75,6 +75,16 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`✅ Found ${orders.length} pending orders`)
+  // 🔍 DEBUG: Log full order data
+console.log('🔍 DEBUG - First order complete data:', JSON.stringify(orders[0], null, 2))
+console.log('🔍 DEBUG - Order items:', orders[0].order_items)
+console.log('🔍 DEBUG - Customer data:', orders[0].customers)
+console.log('🔍 DEBUG - Environment check:', {
+  BAKERY_BANK_BSB: process.env.BAKERY_BANK_BSB || 'MISSING',
+  BAKERY_BANK_ACCOUNT: process.env.BAKERY_BANK_ACCOUNT || 'MISSING',
+  BAKERY_BANK_NAME: process.env.BAKERY_BANK_NAME || 'MISSING',
+  BAKERY_ADDRESS: process.env.BAKERY_ADDRESS || 'MISSING'
+})
     console.log('📋 First order sample:', {
       id: orders[0].id,
       customer: (orders[0].customers as any)?.business_name,
@@ -170,11 +180,17 @@ export async function POST(request: NextRequest) {
           const dueDate = new Date(delivery_date)
           dueDate.setDate(dueDate.getDate() + paymentTerms)
           
-          // ✅ CORRECT DATES
-          const todayDate = new Date()
-          const orderCreatedDate = new Date(order.created_at)
-          const deliveryDate = new Date(delivery_date)
-          
+         // ✅ CORRECT DATES - Fixed timezone handling
+const todayDate = new Date() // Today (invoice generation date)
+const orderCreatedDate = new Date(order.created_at) // When order was placed
+const deliveryDateObj = new Date(delivery_date + 'T00:00:00') // Delivery date (force local timezone)
+
+console.log('📅 Date Debug:', {
+  today: todayDate.toLocaleDateString('en-AU'),
+  orderCreated: orderCreatedDate.toLocaleDateString('en-AU'),
+  delivery: deliveryDateObj.toLocaleDateString('en-AU'),
+  delivery_date_raw: delivery_date
+})
           // Calculate totals
           const subtotal = (order.order_items as any[]).reduce((sum, item) => sum + (item.subtotal || 0), 0)
           const gstTotal = (order.order_items as any[]).reduce((sum, item) => {
