@@ -10,6 +10,7 @@ export interface Product {
   min_quantity: number;
   max_quantity: number;
   image_url: string | null;
+  code?: string | null; // ✅ Add this
   category: string | null;
   is_available: boolean;
   gst_applicable: boolean;
