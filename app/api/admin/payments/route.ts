@@ -1,134 +1,120 @@
-import { createClient } from '@/lib/supabase/server';
-import { NextResponse } from 'next/server';
-import { checkAdmin } from '@/lib/auth';
+export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+import { NextRequest, NextResponse } from 'next/server';
+
+async function createServiceClient() {
+  const { createClient } = await import('@supabase/supabase-js');
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+    }
+  );
+}
+
+export async function POST(request: NextRequest) {
   try {
-    console.log('💰 Payment API called');
+    const supabase = await createServiceClient();
+    const body = await request.json();
     
-    const isAdmin = await checkAdmin();
-    if (!isAdmin) {
-      console.error('❌ Not admin');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const {
+      customer_id,
+      amount,
+      payment_date,
+      payment_method,
+      reference_number,
+      notes,
+      allocations = [], // ✅ Get allocations
+    } = body;
+
+    if (!customer_id || !amount) {
+      return NextResponse.json(
+        { error: 'customer_id and amount are required' },
+        { status: 400 }
+      );
     }
 
-    const supabase = await createClient();
-    const paymentData = await request.json();
+    // Get customer info
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('business_name, contact_name, balance')
+      .eq('id', customer_id)
+      .single();
 
-    console.log('📝 Payment data received:', {
-      customer_id: paymentData.customer_id,
-      amount: paymentData.amount,
-      payment_date: paymentData.payment_date,
-      payment_method: paymentData.payment_method,
-    });
-
-    // Validate required fields
-    if (!paymentData.customer_id) {
-      return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
-    }
-    if (!paymentData.amount || paymentData.amount <= 0) {
-      return NextResponse.json({ error: 'Valid amount is required' }, { status: 400 });
+    if (!customer) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    // Insert payment record
+    // ✅ Insert payment record
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
       .insert({
-        customer_id: paymentData.customer_id,
-        amount: paymentData.amount,
-        payment_date: paymentData.payment_date,
-        payment_method: paymentData.payment_method,
-        reference_number: paymentData.reference_number || null,
-        notes: paymentData.notes || null,
-        recorded_by: null, // Explicitly set to null since we don't track this
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        customer_id,
+        amount: parseFloat(amount),
+        payment_date,
+        payment_method,
+        reference_number: reference_number || null,
+        notes: notes || null,
+        allocated_amount: allocations.reduce((sum: number, a: any) => sum + (a.amount || 0), 0),
       })
       .select()
       .single();
 
-    if (paymentError) {
-      console.error('❌ Payment insert error:', {
-        message: paymentError.message,
-        details: paymentError.details,
-        hint: paymentError.hint,
-        code: paymentError.code,
-      });
-      return NextResponse.json({ 
-        error: paymentError.message,
-        details: paymentError.details 
-      }, { status: 500 });
-    }
+    if (paymentError) throw paymentError;
 
-    console.log('✅ Payment inserted:', payment.id);
+    // ✅ Process allocations to specific invoices
+    if (Array.isArray(allocations) && allocations.length > 0) {
+      for (const allocation of allocations) {
+        if (!allocation.invoice_id || !allocation.amount) continue;
 
-    // Update customer balance
-    try {
-      const { data: customer, error: customerError } = await supabase
-        .from('customers')
-        .select('balance')
-        .eq('id', paymentData.customer_id)
-        .single();
-
-      if (customerError) {
-        console.error('⚠️ Customer fetch error:', customerError);
-        return NextResponse.json({ 
-          success: true, 
-          payment,
-          warning: 'Payment recorded but balance not updated: ' + customerError.message
-        });
-      }
-
-      if (customer) {
-        const oldBalance = customer.balance || 0;
-        const newBalance = oldBalance - paymentData.amount;
-        
-        console.log('💰 Updating balance:', { 
-          customer_id: paymentData.customer_id,
-          old: oldBalance, 
-          payment: paymentData.amount,
-          new: newBalance 
+        // Record invoice payment
+        await supabase.from('invoice_payments').insert({
+          invoice_id: allocation.invoice_id,
+          payment_id: payment.id,
+          amount: allocation.amount,
         });
 
-        const { error: updateError } = await supabase
-          .from('customers')
-          .update({ balance: newBalance })
-          .eq('id', paymentData.customer_id);
+        // Update invoice amount_paid
+        const { data: invoice } = await supabase
+          .from('orders')
+          .select('amount_paid')
+          .eq('id', allocation.invoice_id)
+          .single();
 
-        if (updateError) {
-          console.error('⚠️ Balance update error:', updateError);
-          return NextResponse.json({ 
-            success: true, 
-            payment,
-            warning: 'Payment recorded but balance not updated: ' + updateError.message
-          });
-        }
+        const newAmountPaid = (invoice?.amount_paid || 0) + allocation.amount;
 
-        console.log('✅ Balance updated successfully');
+        await supabase
+          .from('orders')
+          .update({ amount_paid: newAmountPaid })
+          .eq('id', allocation.invoice_id);
       }
-    } catch (balanceError: any) {
-      console.error('⚠️ Balance update exception:', balanceError);
-      return NextResponse.json({ 
-        success: true, 
-        payment,
-        warning: 'Payment recorded but balance update failed'
-      });
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      payment,
-      message: 'Payment recorded and balance updated successfully'
+    // ✅ Update customer balance
+    const newBalance = (customer.balance || 0) - parseFloat(amount);
+    await supabase
+      .from('customers')
+      .update({ balance: newBalance })
+      .eq('id', customer_id);
+
+    console.log('✅ Payment recorded:', {
+      customer: customer.business_name || customer.contact_name,
+      amount,
+      allocations: allocations.length,
     });
 
+    return NextResponse.json({
+      payment: {
+        id: payment.id,
+        customer: customer.business_name || customer.contact_name,
+        amount: parseFloat(amount),
+        new_balance: newBalance,
+        allocations: allocations.length,
+      },
+    });
   } catch (error: any) {
-    console.error('❌ Payment recording exception:', {
-      message: error.message,
-      stack: error.stack,
-    });
-    return NextResponse.json({ 
-      error: error.message || 'Internal server error',
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    }, { status: 500 });
+    console.error('❌ Error recording payment:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
