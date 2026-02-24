@@ -26,12 +26,11 @@ export default async function RecordPaymentPage() {
     .order('business_name');
 
   // Get unpaid/partially paid orders
-  const { data: invoices } = await supabase
-    .from('orders')
-    .select('id, order_number, delivery_date, total_amount, amount_paid, customer_id')
-    .or('amount_paid.is.null,amount_paid.lt.total_amount')
-    .order('delivery_date', { ascending: false })
-    .limit(100);
+// ✅ SIMPLIFIED - Get ALL orders
+const { data: invoices } = await supabase
+  .from('orders')
+  .select('id, delivery_date, total_amount, amount_paid, customer_id')
+  .order('delivery_date', { ascending: false });
 
   return (
     <RecordPaymentWithAllocation 
