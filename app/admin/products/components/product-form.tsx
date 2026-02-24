@@ -12,6 +12,7 @@ interface ProductFormProps {
     description?: string;
     category?: string;
     image_url?: string;
+    code?: string; // ✅ Added
   };
   isEditing?: boolean;
 }
@@ -24,6 +25,7 @@ export default function ProductForm({ product, isEditing = false }: ProductFormP
     description: product?.description || '',
     category: product?.category || '',
     image_url: product?.image_url || '',
+    code: product?.code || '', // ✅ Added
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>(product?.image_url || '');
@@ -35,13 +37,11 @@ export default function ProductForm({ product, isEditing = false }: ProductFormP
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       setError('Please select an image file');
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       setError('Image must be less than 5MB');
       return;
@@ -50,7 +50,6 @@ export default function ProductForm({ product, isEditing = false }: ProductFormP
     setImageFile(file);
     setError('');
 
-    // Create preview
     const reader = new FileReader();
     reader.onloadend = () => {
       setImagePreview(reader.result as string);
@@ -63,11 +62,9 @@ export default function ProductForm({ product, isEditing = false }: ProductFormP
 
     setUploading(true);
     try {
-      // Create unique filename
       const fileExt = imageFile.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-      // Upload to Supabase Storage
       const formDataUpload = new FormData();
       formDataUpload.append('file', imageFile);
       formDataUpload.append('fileName', fileName);
@@ -97,7 +94,6 @@ export default function ProductForm({ product, isEditing = false }: ProductFormP
     setError('');
 
     try {
-      // Upload image first if there's a new one
       let imageUrl = formData.image_url;
       if (imageFile) {
         const uploadedUrl = await uploadImage();
@@ -117,6 +113,7 @@ export default function ProductForm({ product, isEditing = false }: ProductFormP
           ...formData,
           price: parseFloat(formData.price),
           image_url: imageUrl,
+          code: formData.code || null, // ✅ Include code
         }),
       });
 
@@ -163,6 +160,67 @@ export default function ProductForm({ product, isEditing = false }: ProductFormP
         />
       </div>
 
+      {/* ✅ Product Code - NEW FIELD */}
+      <div>
+        <label className="block text-sm font-medium mb-2">
+          Product Code
+        </label>
+        <input
+          type="text"
+          value={formData.code}
+          onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+          className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent font-mono text-lg"
+          placeholder="e.g., 1001, 2050, 900"
+        />
+        <div className="mt-2 p-3 bg-gray-50 rounded-md border border-gray-200">
+          <p className="text-xs font-semibold text-gray-700 mb-2">💡 Code Range Guide:</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+            <div className="flex items-center gap-1">
+              <span className="font-mono font-bold text-amber-700">1000-1999</span>
+              <span className="text-gray-600">🍞 Breads</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="font-mono font-bold text-pink-700">2000-2999</span>
+              <span className="text-gray-600">🎂 Cakes</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="font-mono font-bold text-orange-700">3000-3999</span>
+              <span className="text-gray-600">🥐 Pastries</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="font-mono font-bold text-purple-700">4000-4999</span>
+              <span className="text-gray-600">✨ Specialty</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="font-mono font-bold text-gray-700">5000-5999</span>
+              <span className="text-gray-600">📦 Other</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="font-mono font-bold text-blue-700">900</span>
+              <span className="text-gray-600">⚙️ Admin</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ✅ Special Notice for Code 900 */}
+      {formData.code === '900' && (
+        <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-md">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl">⚙️</div>
+            <div>
+              <p className="text-sm font-semibold text-blue-900 mb-1">
+                Administrative Product (Code 900)
+              </p>
+              <p className="text-xs text-blue-700 leading-relaxed">
+                This product allows <strong>custom descriptions</strong> and <strong>custom prices</strong> when adding to orders.
+                Perfect for credits, stales, damaged goods, delivery charges, and one-off adjustments.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Image Upload */}
       <div>
         <label className="block text-sm font-medium mb-2">Product Image</label>
@@ -177,7 +235,7 @@ export default function ProductForm({ product, isEditing = false }: ProductFormP
             <button
               type="button"
               onClick={removeImage}
-              className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full hover:bg-red-700"
+              className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full hover:bg-red-700 shadow-lg"
             >
               <X className="h-4 w-4" />
             </button>
@@ -201,7 +259,6 @@ export default function ProductForm({ product, isEditing = false }: ProductFormP
           </div>
         )}
 
-        {/* Or paste URL */}
         <div className="mt-3">
           <p className="text-xs text-gray-600 mb-2">Or paste an image URL:</p>
           <input
@@ -223,13 +280,13 @@ export default function ProductForm({ product, isEditing = false }: ProductFormP
           Price <span className="text-red-500">*</span>
         </label>
         <div className="relative">
-          <span className="absolute left-3 top-2 text-gray-500">$</span>
+          <span className="absolute left-3 top-2 text-gray-500 font-semibold">$</span>
           <input
             type="number"
             step="0.01"
             value={formData.price}
             onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-            className="w-full pl-8 pr-3 py-2 border rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            className="w-full pl-8 pr-3 py-2 border rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg"
             placeholder="5.50"
             required
           />
@@ -265,24 +322,24 @@ export default function ProductForm({ product, isEditing = false }: ProductFormP
         <button
           type="submit"
           disabled={loading || uploading}
-          className="flex-1 px-6 py-3 rounded-md text-white font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 px-6 py-3 rounded-md text-white font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
           style={{ backgroundColor: "#006A4E" }}
         >
           {uploading ? (
-            'Uploading image...'
+            '⏳ Uploading image...'
           ) : loading ? (
-            'Saving...'
+            '💾 Saving...'
           ) : isEditing ? (
-            'Update Product'
+            '✅ Update Product'
           ) : (
-            'Create Product'
+            '✨ Create Product'
           )}
         </button>
         <button
           type="button"
           onClick={() => router.back()}
           disabled={loading || uploading}
-          className="px-6 py-3 rounded-md border border-gray-300 hover:bg-gray-50"
+          className="px-6 py-3 rounded-md border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           Cancel
         </button>
