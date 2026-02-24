@@ -1,13 +1,11 @@
 export const dynamic = 'force-dynamic'
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { sendEmail } from '@/lib/email-sender';
 
 // ✅ Helper to create service client
-async function createServiceClient() {
-  const { createClient } = await import('@supabase/supabase-js');
-  
+function createServiceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -22,12 +20,14 @@ async function createServiceClient() {
 
 export async function POST() {
   try {
-    const supabase = await createServiceClient();
-    const today = new Date().toISOString().split('T')[0];
+    const supabase = createServiceClient();
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
     
-    console.log(`🔄 Generating standing orders for ${today}...`);
+    console.log(`\n🔄 [${new Date().toISOString()}] Starting weekly standing order generation...`);
+    console.log(`📅 Generating orders for the week of ${todayStr}`);
 
-    // Get all active standing orders that should be generated today
+    // ✅ Get ALL active standing orders (not filtered by next_generation_date)
     const { data: standingOrders, error: fetchError } = await supabase
       .from('standing_orders')
       .select(`
@@ -38,44 +38,54 @@ export async function POST() {
           product:products(*)
         )
       `)
-      .eq('active', true)
-      .lte('next_generation_date', today);
+      .eq('active', true);
 
     if (fetchError) throw fetchError;
 
     if (!standingOrders || standingOrders.length === 0) {
-      console.log('✅ No standing orders to generate today');
+      console.log('⚠️ No active standing orders found');
       return NextResponse.json({ 
-        message: 'No standing orders to generate',
+        message: 'No active standing orders',
         ordersCreated: 0 
       });
     }
 
+    console.log(`✅ Found ${standingOrders.length} active standing orders`);
+
     let ordersCreated = 0;
     const errors: any[] = [];
+    const ordersSummary: any[] = [];
 
+    // ✅ Generate orders for the next 7 days
     for (const standingOrder of standingOrders) {
       try {
-        // Calculate delivery date (2 days from now)
-        const deliveryDate = new Date();
-        deliveryDate.setDate(deliveryDate.getDate() + 2);
+        const deliveryDay = (standingOrder.delivery_days || standingOrder.delivery_day || '').toLowerCase();
+        
+        if (!deliveryDay) {
+          console.warn(`⚠️ Standing order ${standingOrder.id} has no delivery day set`);
+          continue;
+        }
+
+        // ✅ Calculate next delivery date based on delivery day
+        const deliveryDate = getNextDeliveryDate(deliveryDay);
         const deliveryDateStr = deliveryDate.toISOString().split('T')[0];
 
-        // Check if order already exists for this delivery date
+        console.log(`📦 Processing: ${standingOrder.customer.business_name} → ${deliveryDay} (${deliveryDateStr})`);
+
+        // ✅ Check if order already exists for this delivery date
         const { data: existingOrder } = await supabase
           .from('orders')
           .select('id')
           .eq('customer_id', standingOrder.customer_id)
           .eq('delivery_date', deliveryDateStr)
-          .eq('source', 'standing_order')
           .maybeSingle();
 
         if (existingOrder) {
-          console.log(`⏭️ Order already exists for ${standingOrder.customer.business_name} on ${deliveryDateStr}`);
+          console.log(`  ⏭️ Order already exists for ${deliveryDateStr}`);
           continue;
         }
 
-        // Get customer pricing for accurate totals
+        // ✅ Get customer pricing for accurate totals
         const itemsWithPricing = await Promise.all(
           standingOrder.items.map(async (item: any) => {
             const { data: pricing } = await supabase
@@ -103,7 +113,7 @@ export async function POST() {
           })
         );
 
-        // Calculate totals
+        // ✅ Calculate totals
         const totalBeforeGST = itemsWithPricing.reduce((sum, item) => sum + item.subtotal, 0);
         const gstAmount = itemsWithPricing
           .filter(item => item.gst_applicable)
@@ -123,13 +133,13 @@ export async function POST() {
             total_amount: totalAmount,
             status: 'pending',
             source: 'standing_order',
-            notes: `Auto-generated from ${standingOrder.delivery_days || standingOrder.delivery_day} standing order`
+            notes: `Auto-generated from ${deliveryDay} standing order`
           })
           .select()
           .single();
 
         if (orderError) {
-          console.error(`❌ Error creating order for ${standingOrder.customer.business_name}:`, orderError);
+          console.error(`  ❌ Error creating order:`, orderError);
           errors.push({
             standing_order_id: standingOrder.id,
             customer: standingOrder.customer.business_name,
@@ -138,15 +148,17 @@ export async function POST() {
           continue;
         }
 
-        console.log(`✅ Created order ${newOrder.id} for ${standingOrder.customer.business_name}`);
+        console.log(`  ✅ Created order ${newOrder.id.slice(0, 8)}`);
 
-        // Create order items
+        // ✅ Create order items
         const orderItems = itemsWithPricing.map(item => ({
           order_id: newOrder.id,
           product_id: item.product_id,
+          product_name: item.product_name,
           quantity: item.quantity,
           unit_price: item.unit_price,
-          subtotal: item.subtotal
+          subtotal: item.subtotal,
+          gst_applicable: item.gst_applicable
         }));
 
         const { error: itemsError } = await supabase
@@ -154,7 +166,7 @@ export async function POST() {
           .insert(orderItems);
 
         if (itemsError) {
-          console.error(`❌ Error creating order items:`, itemsError);
+          console.error(`  ❌ Error creating order items:`, itemsError);
           // Rollback: delete the order
           await supabase.from('orders').delete().eq('id', newOrder.id);
           errors.push({
@@ -165,52 +177,81 @@ export async function POST() {
           continue;
         }
 
-        // Update standing order's next generation date
-        const nextGenDate = calculateNextGenerationDate(standingOrder.delivery_days || standingOrder.delivery_day);
+        // ✅ Update standing order tracking dates
+        const nextDelivery = getNextDeliveryDate(deliveryDay, 7); // Next week's delivery
+        const nextGenerationDateStr = nextDelivery.toISOString().split('T')[0];
+
         await supabase
           .from('standing_orders')
           .update({
-            last_generated_date: today,
-            next_generation_date: nextGenDate
+            last_generated_date: todayStr,
+            next_generation_date: nextGenerationDateStr
           })
           .eq('id', standingOrder.id);
 
         ordersCreated++;
-        console.log(`✅ Order complete for ${standingOrder.customer.business_name} - Delivery: ${deliveryDateStr}`);
+        
+        ordersSummary.push({
+          customer: standingOrder.customer.business_name,
+          deliveryDay: deliveryDay,
+          deliveryDate: deliveryDateStr,
+          total: totalAmount,
+          orderId: newOrder.id.slice(0, 8)
+        });
 
-        // ✅ Send confirmation email using direct function
+        console.log(`  ✅ Complete - Delivery: ${deliveryDateStr}, Total: $${totalAmount.toFixed(2)}`);
+
+        // ✅ Send confirmation email
         try {
           const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://debsbakery-portal.vercel.app';
           
           await sendEmail({
             to: standingOrder.customer.email,
-            subject: 'Your Standing Order Has Been Placed - Debs Bakery',
+            subject: `Your ${deliveryDay.charAt(0).toUpperCase() + deliveryDay.slice(1)} Standing Order - Deb's Bakery`,
             html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h1 style="color: #006A4E;">Your Standing Order is Confirmed</h1>
-                <p>Hi ${standingOrder.customer.business_name || standingOrder.customer.email}!</p>
-                <p>Your weekly standing order has been automatically placed:</p>
-                <p><strong>Order #${newOrder.id.slice(0, 8).toUpperCase()}</strong></p>
-                <p><strong>Delivery Date:</strong> ${deliveryDate.toLocaleDateString('en-AU', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
-                })}</p>
-                <p><strong>Total: $${totalAmount.toFixed(2)}</strong></p>
-                <hr>
-                <p>Need to make changes? Edit your order before the cutoff time in the <a href="${siteUrl}/portal">Customer Portal</a></p>
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background: #006A4E; color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
+                  <h1 style="margin: 0; font-size: 24px;">🥖 Deb's Bakery</h1>
+                  <p style="margin: 10px 0 0 0;">Your Standing Order is Confirmed</p>
+                </div>
+                
+                <div style="background: white; padding: 30px; border: 1px solid #ddd; border-top: none; border-radius: 0 0 8px 8px;">
+                  <p style="font-size: 16px; margin-top: 0;">Hi ${standingOrder.customer.business_name || standingOrder.customer.email}!</p>
+                  
+                  <p>Your weekly standing order has been automatically placed for this week:</p>
+                  
+                  <div style="background: #f0fdf4; padding: 15px; border-radius: 5px; border-left: 4px solid #006A4E; margin: 20px 0;">
+                    <p style="margin: 5px 0;"><strong>Order #:</strong> ${newOrder.id.slice(0, 8).toUpperCase()}</p>
+                    <p style="margin: 5px 0;"><strong>Delivery Day:</strong> ${deliveryDay.charAt(0).toUpperCase() + deliveryDay.slice(1)}</p>
+                    <p style="margin: 5px 0;"><strong>Delivery Date:</strong> ${deliveryDate.toLocaleDateString('en-AU', { 
+                      weekday: 'long', 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}</p>
+                    <p style="margin: 5px 0; font-size: 18px; color: #006A4E;"><strong>Total: $${totalAmount.toFixed(2)}</strong></p>
+                  </div>
+                  
+                  <div style="background: #fffbeb; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                    <p style="margin: 0; font-size: 14px;"><strong>📝 Need to make changes?</strong></p>
+                    <p style="margin: 10px 0 0 0; font-size: 14px;">You can edit your order before the cutoff time in the <a href="${siteUrl}/portal" style="color: #006A4E; font-weight: bold;">Customer Portal</a></p>
+                  </div>
+                  
+                  <p style="margin-top: 20px; color: #666; font-size: 13px;">
+                    To pause or manage your standing orders, visit your <a href="${siteUrl}/portal/standing-orders" style="color: #006A4E;">Standing Orders page</a>.
+                  </p>
+                </div>
               </div>
             `,
           });
           
-          console.log(`✅ Standing order email sent to ${standingOrder.customer.email}`);
+          console.log(`  ✅ Confirmation email sent to ${standingOrder.customer.email}`);
         } catch (emailError) {
-          console.error('⚠️ Standing order email failed:', emailError);
+          console.error('  ⚠️ Email failed:', emailError);
         }
 
       } catch (error: any) {
-        console.error(`❌ Error creating order for standing order ${standingOrder.id}:`, error);
+        console.error(`  ❌ Error processing standing order ${standingOrder.id}:`, error);
         errors.push({
           standing_order_id: standingOrder.id,
           customer: standingOrder.customer?.business_name || 'Unknown',
@@ -219,42 +260,77 @@ export async function POST() {
       }
     }
 
+    console.log(`\n✅ Generation complete: ${ordersCreated} orders created`);
+    if (ordersSummary.length > 0) {
+      console.log('\n📋 Orders Created:');
+      ordersSummary.forEach(order => {
+        console.log(`  • ${order.customer} - ${order.deliveryDay} (${order.deliveryDate}) - $${order.total.toFixed(2)}`);
+      });
+    }
+
     return NextResponse.json({
-      message: `Successfully generated ${ordersCreated} orders`,
+      success: true,
+      message: `Successfully generated ${ordersCreated} standing orders`,
       ordersCreated,
+      orders: ordersSummary,
       errors: errors.length > 0 ? errors : undefined
     });
 
   } catch (error: any) {
     console.error('❌ Error in standing order generation:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to generate standing orders' },
+      { success: false, error: error.message || 'Failed to generate standing orders' },
       { status: 500 }
     );
   }
 }
 
-function calculateNextGenerationDate(deliveryDay: string): string {
+/**
+ * ✅ Calculate next delivery date for a given day of the week
+ * @param deliveryDay - e.g., "monday", "friday"
+ * @param daysAhead - How many days to look ahead (default 7 for next occurrence)
+ */
+function getNextDeliveryDate(deliveryDay: string, daysAhead: number = 7): Date {
   const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
   const targetDayIndex = days.indexOf(deliveryDay.toLowerCase());
   
   if (targetDayIndex === -1) {
+    // Fallback: return tomorrow if invalid day
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
+    return tomorrow;
   }
   
   const today = new Date();
   const currentDayIndex = today.getDay();
   
+  // Calculate days until next occurrence of target day
   let daysUntilDelivery = targetDayIndex - currentDayIndex;
+  
   if (daysUntilDelivery <= 0) {
+    // Target day is earlier in week or today, go to next week
     daysUntilDelivery += 7;
   }
   
-  const daysUntilGeneration = daysUntilDelivery - 2;
-  const generationDate = new Date(today);
-  generationDate.setDate(today.getDate() + daysUntilGeneration);
+  // If looking further ahead (e.g., next week's occurrence)
+  if (daysAhead > 7) {
+    daysUntilDelivery += 7;
+  }
   
-  return generationDate.toISOString().split('T')[0];
+  const deliveryDate = new Date(today);
+  deliveryDate.setDate(today.getDate() + daysUntilDelivery);
+  
+  return deliveryDate;
+}
+
+/**
+ * ✅ Manual trigger function for testing
+ */
+export async function GET() {
+  return NextResponse.json({
+    message: 'Standing Order Generation Endpoint',
+    usage: 'POST to this endpoint to trigger standing order generation',
+    schedule: 'Automated: Every Sunday at 6:00 AM',
+    manual: 'POST /api/standing-orders/generate'
+  });
 }

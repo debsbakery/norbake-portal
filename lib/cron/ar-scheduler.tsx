@@ -16,12 +16,13 @@ export function startARScheduler() {
   console.log('\n🚀 Starting AR & Standing Order Scheduler...');
   
   /**
-   * Daily Standing Order Generation
-   * Runs at 12:01 AM every day
+   * ✅ WEEKLY Standing Order Generation
+   * Runs every Sunday at 6:00 AM
+   * Generates orders for the entire upcoming week
    */
-  cron.schedule('1 0 * * *', async () => {
+  cron.schedule('0 6 * * 0', async () => {  // ✅ CHANGED: Every Sunday at 6 AM
     const timestamp = new Date().toISOString();
-    console.log(`\n🔄 [${timestamp}] Running daily standing order generation...`);
+    console.log(`\n🔄 [${timestamp}] Running WEEKLY standing order generation...`);
     
     try {
       const response = await fetch(`${APP_URL}/api/standing-orders/generate`, {
@@ -37,7 +38,7 @@ export function startARScheduler() {
       }
       
       const result = await response.json();
-      console.log(`✅ Standing Order Generation Complete: ${result.ordersCreated} orders created`);
+      console.log(`✅ Standing Order Generation Complete: ${result.ordersCreated} orders created for the week`);
       
       if (result.errors && result.errors.length > 0) {
         console.error('⚠️ Errors during generation:', JSON.stringify(result.errors, null, 2));
@@ -136,7 +137,7 @@ export function startARScheduler() {
   const initTime = new Date().toISOString();
   console.log(`\n✅ [${initTime}] AR & Standing Order Scheduler Initialized`);
   console.log('📅 Scheduled Jobs:');
-  console.log('  - Daily Standing Orders: 12:01 AM (1 0 * * *)');
+  console.log('  - ✅ WEEKLY Standing Orders: Sunday 6:00 AM (0 6 * * 0)');
   console.log('  - Daily AR Aging Update: 1:00 AM (0 1 * * *)');
   console.log('  - Weekly Overdue Reminders: Monday 9:00 AM (0 9 * * 1)');
   console.log('  - Monthly Statements: 1st of month 10:00 AM (0 10 1 * *)');
@@ -144,7 +145,7 @@ export function startARScheduler() {
 }
 
 /**
- * Manual trigger for testing (optional)
+ * Manual trigger for testing
  */
 export async function triggerStandingOrderGeneration() {
   try {

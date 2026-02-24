@@ -12,10 +12,14 @@ interface PackingSlipData {
     phone: string;
     address: string;
   };
+  productCodeRange?: {  // ✅ NEW: Optional range filter
+    start: number;
+    end: number;
+  };
 }
 
 export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF> {
-  const { order, bakeryInfo } = data;
+  const { order, bakeryInfo, productCodeRange } = data;
   const doc = new jsPDF();
   
   const logoColor: [number, number, number] = [206, 17, 38];
@@ -51,6 +55,15 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
   doc.setFontSize(28);
   doc.setFont('helvetica', 'bold');
   doc.text('PACKING SLIP', 210 - margin, 25, { align: 'right' });
+  
+  // ✅ ADD: Range indicator if filtering
+  if (productCodeRange) {
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(206, 17, 38);
+    doc.text(`Products: ${productCodeRange.start}-${productCodeRange.end}`, 210 - margin, 35, { align: 'right' });
+    doc.setTextColor(...textColor);
+  }
   
   yPos = 60;
   doc.setFillColor(250, 250, 250);
@@ -98,7 +111,20 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
 
   yPos = 110;
   
-  const tableData = order.order_items.map(item => [
+  // ✅ FILTER items by product code range if specified
+  let filteredItems = order.order_items;
+  
+  if (productCodeRange) {
+    filteredItems = order.order_items.filter(item => {
+      const productCode = (item as any).product_code;
+      if (!productCode) return false;
+      return productCode >= productCodeRange.start && productCode <= productCodeRange.end;
+    });
+  }
+  
+  // ✅ ADD: Product codes to table
+  const tableData = filteredItems.map(item => [
+    (item as any).product_code || 'N/A',  // ✅ PRODUCT CODE
     item.product_name,
     item.quantity.toString(),
     '☐',
@@ -106,7 +132,7 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
 
   autoTable(doc, {
     startY: yPos,
-    head: [['Product', 'Quantity', 'Picked']],
+    head: [['Code', 'Product', 'Qty', 'Picked']],  // ✅ ADD CODE COLUMN
     body: tableData,
     theme: 'striped',
     headStyles: {
@@ -120,16 +146,17 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
       textColor: [0, 0, 0],
     },
     columnStyles: {
-      0: { cellWidth: 120 },
-      1: { cellWidth: 40, halign: 'center', fontSize: 12, fontStyle: 'bold' },
-      2: { cellWidth: 25, halign: 'center', fontSize: 14 },
+      0: { cellWidth: 25 },  // ✅ CODE
+      1: { cellWidth: 95 },  // Product name
+      2: { cellWidth: 35, halign: 'center', fontSize: 12, fontStyle: 'bold' },
+      3: { cellWidth: 25, halign: 'center', fontSize: 14 },
     },
     margin: { left: margin, right: margin },
   });
 
   const finalY = (doc as any).lastAutoTable.finalY + 15;
 
-  const totalItems = order.order_items.reduce((sum, item) => sum + item.quantity, 0);
+  const totalItems = filteredItems.reduce((sum, item) => sum + item.quantity, 0);
   
   doc.setFillColor(0, 0, 0);
   doc.rect(210 - 85, finalY, 65, 10, 'F');

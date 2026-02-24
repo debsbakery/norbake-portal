@@ -8,8 +8,11 @@ export default function AdminOrderEditView({ order, products }: any) {
   const router = useRouter();
   const [items, setItems] = useState(order.order_items || []);
   const [saving, setSaving] = useState(false);
+  
+  // ✅ ADD: PO and Docket state
+  const [purchaseOrderNumber, setPurchaseOrderNumber] = useState(order.purchase_order_number || '');
+  const [docketNumber, setDocketNumber] = useState(order.docket_number || '');
 
-  // Same logic as customer edit view...
   function calculateTotals() {
     const subtotal = items.reduce((sum: number, item: any) => sum + item.quantity * item.unit_price, 0);
     const gst = items.reduce((sum: number, item: any) => 
@@ -65,6 +68,8 @@ export default function AdminOrderEditView({ order, products }: any) {
             gst_applicable: item.gst_applicable,
           })),
           total_amount: total,
+          purchase_order_number: purchaseOrderNumber || null,  // ✅ ADD
+          docket_number: docketNumber || null,                 // ✅ ADD
         }),
       });
 
@@ -94,35 +99,72 @@ export default function AdminOrderEditView({ order, products }: any) {
       <h1 className="text-3xl font-bold mb-6">Edit Order #{order.id.slice(0, 8).toUpperCase()}</h1>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">Order Items</h2>
-          {items.length === 0 ? (
-            <p className="text-center py-8 text-gray-500">No items</p>
-          ) : (
-            <div className="space-y-3">
-              {items.map((item: any) => (
-                <div key={item.id} className="flex items-center gap-4 p-3 border rounded">
-                  <div className="flex-1">
-                    <p className="font-medium">{item.product?.name || item.product_name}</p>
-                    <p className="text-sm text-gray-500">${item.unit_price.toFixed(2)}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-8 h-8 bg-gray-200 rounded">
-                      <Minus className="h-4 w-4 mx-auto" />
-                    </button>
-                    <span className="w-12 text-center font-semibold">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-8 h-8 bg-gray-200 rounded">
-                      <Plus className="h-4 w-4 mx-auto" />
-                    </button>
-                  </div>
-                  <div className="w-24 text-right">${(item.quantity * item.unit_price).toFixed(2)}</div>
-                  <button onClick={() => updateQuantity(item.id, 0)} className="text-red-600">
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              ))}
+        <div className="lg:col-span-2 space-y-6">
+          {/* ✅ ADD: PO and Docket Number Fields */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold mb-4">Order References</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="po_number" className="block text-sm font-medium text-gray-700 mb-1">
+                  Purchase Order Number (Optional)
+                </label>
+                <input
+                  type="text"
+                  id="po_number"
+                  placeholder="e.g., PO-2024-1234"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  value={purchaseOrderNumber}
+                  onChange={(e) => setPurchaseOrderNumber(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="docket_number" className="block text-sm font-medium text-gray-700 mb-1">
+                  Docket Number (Optional)
+                </label>
+                <input
+                  type="text"
+                  id="docket_number"
+                  placeholder="e.g., DOC-5678"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  value={docketNumber}
+                  onChange={(e) => setDocketNumber(e.target.value)}
+                />
+              </div>
             </div>
-          )}
+          </div>
+
+          {/* Existing Order Items Section */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold mb-4">Order Items</h2>
+            {items.length === 0 ? (
+              <p className="text-center py-8 text-gray-500">No items</p>
+            ) : (
+              <div className="space-y-3">
+                {items.map((item: any) => (
+                  <div key={item.id} className="flex items-center gap-4 p-3 border rounded">
+                    <div className="flex-1">
+                      <p className="font-medium">{item.product?.name || item.product_name}</p>
+                      <p className="text-sm text-gray-500">${item.unit_price.toFixed(2)}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-8 h-8 bg-gray-200 rounded">
+                        <Minus className="h-4 w-4 mx-auto" />
+                      </button>
+                      <span className="w-12 text-center font-semibold">{item.quantity}</span>
+                      <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-8 h-8 bg-gray-200 rounded">
+                        <Plus className="h-4 w-4 mx-auto" />
+                      </button>
+                    </div>
+                    <div className="w-24 text-right">${(item.quantity * item.unit_price).toFixed(2)}</div>
+                    <button onClick={() => updateQuantity(item.id, 0)} className="text-red-600">
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow p-6 sticky top-6">
