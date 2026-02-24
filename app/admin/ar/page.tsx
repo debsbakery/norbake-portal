@@ -30,7 +30,6 @@ async function getARSummary() {
 
   return arSummary || []
 }
-
 async function getRecentPayments() {
   const supabase = await createClient()
 
@@ -42,7 +41,7 @@ async function getRecentPayments() {
       payment_date,
       payment_method,
       reference_number,
-      customers!inner(business_name, contact_name)
+      customer_id
     `)
     .order('payment_date', { ascending: false })
     .limit(20)
@@ -52,7 +51,23 @@ async function getRecentPayments() {
     return []
   }
 
-  return payments || []
+  // Get customer names separately
+  const paymentsWithCustomers = await Promise.all(
+    (payments || []).map(async (payment) => {
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('business_name, contact_name')
+        .eq('id', payment.customer_id)
+        .single()
+
+      return {
+        ...payment,
+        customer_name: customer?.business_name || customer?.contact_name || 'Unknown',
+      }
+    })
+  )
+
+  return paymentsWithCustomers
 }
 
 export default async function ARSummaryPage() {
@@ -163,7 +178,9 @@ export default async function ARSummaryPage() {
                       {new Date(payment.payment_date).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="font-medium">
-                      {payment.customers?.business_name || payment.customers?.contact_name || 'Unknown'}
+              <TableCell className="font-medium">
+  {payment.customer_name}
+</TableCell>
                     </TableCell>
                     <TableCell className="capitalize">
                       {payment.payment_method?.replace('_', ' ')}
