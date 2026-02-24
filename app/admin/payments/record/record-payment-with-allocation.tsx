@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, DollarSign, Search } from 'lucide-react';
+import { ArrowLeft, Save, DollarSign, Search, FileText } from 'lucide-react';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: '💵 Cash' },
@@ -19,11 +19,24 @@ interface Customer {
   balance: number | null;
 }
 
-interface RecordPaymentViewProps {
-  customers: Customer[];
+interface Invoice {
+  id: string;
+  order_number: string;
+  delivery_date: string;
+  total_amount: number;
+  amount_paid: number | null;
+  customer_id: string;
 }
 
-export default function RecordPaymentView({ customers = [] }: RecordPaymentViewProps) {
+interface RecordPaymentWithAllocationProps {
+  customers: Customer[];
+  invoices: Invoice[];
+}
+
+export default function RecordPaymentWithAllocation({ 
+  customers = [], 
+  invoices = [] 
+}: RecordPaymentWithAllocationProps) {
   const router = useRouter();
   const [formData, setFormData] = useState({
     customer_id: '',
@@ -33,11 +46,11 @@ export default function RecordPaymentView({ customers = [] }: RecordPaymentViewP
     reference_number: '',
     notes: '',
   });
+  const [allocations, setAllocations] = useState<{ invoice_id: string; amount: number }[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ Safe filtering with null checks
   const filteredCustomers = (customers || []).filter((c) => {
     if (!c) return false;
     const searchLower = searchTerm.toLowerCase();
@@ -46,13 +59,65 @@ export default function RecordPaymentView({ customers = [] }: RecordPaymentViewP
     return businessName.includes(searchLower) || contactName.includes(searchLower);
   });
 
-  // ✅ Safe customer lookup
   const selectedCustomer = (customers || []).find((c) => c?.id === formData.customer_id);
   
-  // ✅ Ultra-safe balance calculation
+  const customerInvoices = (invoices || []).filter(
+    (inv) => inv.customer_id === formData.customer_id
+  );
+
   const currentBalance = typeof selectedCustomer?.balance === 'number' ? selectedCustomer.balance : 0;
   const paymentAmount = parseFloat(formData.amount) || 0;
-  const newBalance = currentBalance - paymentAmount;
+  const allocatedAmount = allocations.reduce((sum, a) => sum + a.amount, 0);
+  const unallocatedAmount = paymentAmount - allocatedAmount;
+
+  function handleAutoAllocate() {
+    if (paymentAmount <= 0) return;
+
+    const newAllocations: { invoice_id: string; amount: number }[] = [];
+    let remaining = paymentAmount;
+
+    // Allocate to oldest invoices first
+    const sortedInvoices = [...customerInvoices].sort(
+      (a, b) => new Date(a.delivery_date).getTime() - new Date(b.delivery_date).getTime()
+    );
+
+    for (const invoice of sortedInvoices) {
+      if (remaining <= 0) break;
+
+      const due = invoice.total_amount - (invoice.amount_paid || 0);
+      const allocate = Math.min(remaining, due);
+
+      if (allocate > 0) {
+        newAllocations.push({ invoice_id: invoice.id, amount: allocate });
+        remaining -= allocate;
+      }
+    }
+
+    setAllocations(newAllocations);
+  }
+
+  function handleManualAllocate(invoiceId: string, amount: number) {
+    const invoice = customerInvoices.find((i) => i.id === invoiceId);
+    if (!invoice) return;
+
+    const due = invoice.total_amount - (invoice.amount_paid || 0);
+    const validAmount = Math.max(0, Math.min(amount, due, paymentAmount - allocatedAmount + (allocations.find(a => a.invoice_id === invoiceId)?.amount || 0)));
+
+    setAllocations((prev) => {
+      const existing = prev.find((a) => a.invoice_id === invoiceId);
+      if (existing) {
+        if (validAmount === 0) {
+          return prev.filter((a) => a.invoice_id !== invoiceId);
+        }
+        return prev.map((a) =>
+          a.invoice_id === invoiceId ? { ...a, amount: validAmount } : a
+        );
+      } else if (validAmount > 0) {
+        return [...prev, { invoice_id: invoiceId, amount: validAmount }];
+      }
+      return prev;
+    });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -73,13 +138,14 @@ export default function RecordPaymentView({ customers = [] }: RecordPaymentViewP
         body: JSON.stringify({
           ...formData,
           amount: parseFloat(formData.amount),
+          allocations, // ✅ Send allocations
         }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        alert(`✅ Payment Recorded!\n\nCustomer: ${data.payment.customer}\nAmount: $${data.payment.amount.toFixed(2)}\nNew Balance: $${data.payment.new_balance.toFixed(2)}`);
+        alert(`✅ Payment Recorded!\n\nCustomer: ${data.payment.customer}\nAmount: $${data.payment.amount.toFixed(2)}\nAllocated: $${allocatedAmount.toFixed(2)}\nNew Balance: $${data.payment.new_balance.toFixed(2)}`);
         router.push('/admin/ar');
         router.refresh();
       } else {
@@ -94,7 +160,7 @@ export default function RecordPaymentView({ customers = [] }: RecordPaymentViewP
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
+    <div className="max-w-5xl mx-auto p-6">
       <button
         onClick={() => router.push('/admin')}
         className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
@@ -133,7 +199,10 @@ export default function RecordPaymentView({ customers = [] }: RecordPaymentViewP
 
             <select
               value={formData.customer_id}
-              onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })}
+              onChange={(e) => {
+                setFormData({ ...formData, customer_id: e.target.value });
+                setAllocations([]);
+              }}
               required
               className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
             >
@@ -147,7 +216,7 @@ export default function RecordPaymentView({ customers = [] }: RecordPaymentViewP
             </select>
 
             {selectedCustomer && (
-              <div className="mt-3 grid grid-cols-2 gap-4">
+              <div className="mt-3 grid grid-cols-3 gap-4">
                 <div className="p-3 bg-blue-50 rounded border border-blue-200">
                   <p className="text-xs text-blue-600 mb-1">Current Balance</p>
                   <p className="text-xl font-bold text-blue-800">
@@ -155,12 +224,20 @@ export default function RecordPaymentView({ customers = [] }: RecordPaymentViewP
                   </p>
                 </div>
                 {formData.amount && paymentAmount > 0 && (
-                  <div className="p-3 bg-green-50 rounded border border-green-200">
-                    <p className="text-xs text-green-600 mb-1">New Balance</p>
-                    <p className="text-xl font-bold text-green-800">
-                      ${newBalance.toFixed(2)}
-                    </p>
-                  </div>
+                  <>
+                    <div className="p-3 bg-purple-50 rounded border border-purple-200">
+                      <p className="text-xs text-purple-600 mb-1">Allocated</p>
+                      <p className="text-xl font-bold text-purple-800">
+                        ${allocatedAmount.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-green-50 rounded border border-green-200">
+                      <p className="text-xs text-green-600 mb-1">New Balance</p>
+                      <p className="text-xl font-bold text-green-800">
+                        ${(currentBalance - paymentAmount).toFixed(2)}
+                      </p>
+                    </div>
+                  </>
                 )}
               </div>
             )}
@@ -180,13 +257,85 @@ export default function RecordPaymentView({ customers = [] }: RecordPaymentViewP
                 step="0.01"
                 min="0.01"
                 value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, amount: e.target.value });
+                  setAllocations([]);
+                }}
                 required
                 placeholder="0.00"
                 className="w-full pl-8 pr-4 py-3 text-lg border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
               />
             </div>
           </div>
+
+          {/* Invoice Allocation */}
+          {formData.customer_id && customerInvoices.length > 0 && paymentAmount > 0 && (
+            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Allocate to Invoices
+                </h3>
+                <button
+                  type="button"
+                  onClick={handleAutoAllocate}
+                  className="text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  Auto-Allocate (Oldest First)
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {customerInvoices.map((invoice) => {
+                  const due = invoice.total_amount - (invoice.amount_paid || 0);
+                  const allocated = allocations.find((a) => a.invoice_id === invoice.id)?.amount || 0;
+
+                  return (
+                    <div key={invoice.id} className="flex items-center gap-3 bg-white p-3 rounded border">
+                      <div className="flex-1">
+                        <p className="font-mono text-sm font-semibold">
+                          #{invoice.order_number}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {new Date(invoice.delivery_date).toLocaleDateString()} • Due: ${due.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="w-32">
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-xs text-gray-500">
+                            $
+                          </span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max={due}
+                            value={allocated || ''}
+                            onChange={(e) =>
+                              handleManualAllocate(invoice.id, parseFloat(e.target.value) || 0)
+                            }
+                            placeholder="0.00"
+                            className="w-full pl-5 pr-2 py-1 text-sm border rounded"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {unallocatedAmount !== 0 && (
+                <div className={`mt-3 p-2 rounded text-sm ${
+                  unallocatedAmount > 0 ? 'bg-yellow-50 text-yellow-800' : 'bg-red-50 text-red-800'
+                }`}>
+                  {unallocatedAmount > 0 
+                    ? `💡 Unallocated: $${unallocatedAmount.toFixed(2)} (will reduce overall balance)`
+                    : `⚠️ Over-allocated by $${Math.abs(unallocatedAmount).toFixed(2)}`
+                  }
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Payment Date */}
           <div>
