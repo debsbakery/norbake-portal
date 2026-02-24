@@ -33,6 +33,11 @@ export default function RecordPaymentView({ customers }: any) {
 
   const selectedCustomer = customers.find((c: any) => c.id === formData.customer_id);
 
+  // ✅ FIXED: Safe calculation with null/undefined handling
+  const newBalance = selectedCustomer 
+    ? (selectedCustomer.balance || 0) - (parseFloat(formData.amount) || 0)
+    : 0;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -72,10 +77,6 @@ export default function RecordPaymentView({ customers }: any) {
       setSaving(false);
     }
   }
-
-  const newBalance = selectedCustomer 
-    ? selectedCustomer.balance - (parseFloat(formData.amount) || 0)
-    : 0;
 
   return (
     <div className="max-w-3xl mx-auto p-6">
@@ -126,7 +127,7 @@ export default function RecordPaymentView({ customers }: any) {
               {filteredCustomers.map((customer: any) => (
                 <option key={customer.id} value={customer.id}>
                   {customer.business_name || customer.contact_name} - Balance: $
-                  {customer.balance.toFixed(2)}
+                  {(customer.balance || 0).toFixed(2)}
                 </option>
               ))}
             </select>
@@ -136,7 +137,7 @@ export default function RecordPaymentView({ customers }: any) {
                 <div className="p-3 bg-blue-50 rounded border border-blue-200">
                   <p className="text-xs text-blue-600 mb-1">Current Balance</p>
                   <p className="text-xl font-bold text-blue-800">
-                    ${selectedCustomer.balance.toFixed(2)}
+                    ${(selectedCustomer.balance || 0).toFixed(2)}
                   </p>
                 </div>
                 {formData.amount && (
