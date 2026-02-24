@@ -16,15 +16,16 @@ async function createServiceClient() {
 // GET single product
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // ✅ Changed to Promise
 ) {
   try {
+    const { id } = await params; // ✅ Await params
     const supabase = await createServiceClient();
 
     const { data: product, error } = await supabase
       .from('products')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (error) throw error;
@@ -39,12 +40,13 @@ export async function GET(
 // PUT - Update product
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // ✅ Changed to Promise
 ) {
   try {
+    const { id } = await params; // ✅ Await params
     const supabase = await createServiceClient();
     const body = await request.json();
-    const { name, price, description, category, image_url, code } = body; // ✅ Add code
+    const { name, price, description, category, image_url, code } = body;
 
     if (!name || !price) {
       return NextResponse.json(
@@ -61,10 +63,10 @@ export async function PUT(
         description: description || null,
         category: category || null,
         image_url: image_url || null,
-        code: code || null, // ✅ Update code
+        code: code || null,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
@@ -82,19 +84,20 @@ export async function PUT(
 // DELETE product
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // ✅ Changed to Promise
 ) {
   try {
+    const { id } = await params; // ✅ Await params
     const supabase = await createServiceClient();
 
     const { error } = await supabase
       .from('products')
       .delete()
-      .eq('id', params.id);
+      .eq('id', id);
 
     if (error) throw error;
 
-    console.log('✅ Product deleted:', params.id);
+    console.log('✅ Product deleted:', id);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
