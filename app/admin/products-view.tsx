@@ -21,7 +21,7 @@ export default function ProductsView() {
     const { data, error } = await supabase
       .from('products')
       .select('*')
-      .order('product_number', { ascending: true, nullsFirst: false });
+      .order('code', { ascending: true, nullsFirst: false }); // ✅ Changed from product_number
 
     if (error) {
       console.error('Error loading products:', error);
@@ -32,23 +32,17 @@ export default function ProductsView() {
   }
 
   async function saveProduct(product: Partial<Product>) {
-    // Validate product_number (1000-5000 range)
-    if (product.product_number !== null && product.product_number !== undefined) {
-      if (product.product_number < 1000 || product.product_number > 5000) {
-        alert('Product code must be between 1000 and 5000');
-        return;
-      }
-
+    // ✅ Validate code field instead (optional validation)
+    if (product.code && product.code.trim()) {
       // Check if code is already used
       const { data: existing } = await supabase
         .from('products')
         .select('id')
-        .eq('product_number', product.product_number)
-        .neq('id', product.id || '')
-        .single();
+        .eq('code', product.code.trim())
+        .neq('id', product.id || '');
 
-      if (existing) {
-        alert(`Product code ${product.product_number} is already in use`);
+      if (existing && existing.length > 0) {
+        alert(`Product code ${product.code} is already in use`);
         return;
       }
     }
@@ -60,7 +54,7 @@ export default function ProductsView() {
         description: product.description,
         category: product.category,
         price: product.price,
-        product_number: product.product_number,
+        code: product.code, // ✅ Changed from product_number
         unit: product.unit,
       })
       .eq('id', product.id!);
@@ -114,19 +108,20 @@ export default function ProductsView() {
               <tr key={product.id}>
                 {isEditing === product.id ? (
                   <>
+                    {/* ✅ CODE FIELD (was wrong) */}
                     <td className="px-6 py-4">
                       <input
-                        type="number"
-                        min="1000"
-                        max="5000"
-                        value={editForm.product_number || ''}
+                        type="text"
+                        value={editForm.code || ''}
                         onChange={(e) =>
-                          setEditForm({ ...editForm, product_number: parseInt(e.target.value) || null })
+                          setEditForm({ ...editForm, code: e.target.value || null })
                         }
-                        className="w-24 border border-gray-300 rounded px-2 py-1"
-                        placeholder="1000-5000"
+                        className="w-24 border border-gray-300 rounded px-2 py-1 font-mono"
+                        placeholder="1001"
                       />
                     </td>
+
+                    {/* NAME */}
                     <td className="px-6 py-4">
                       <input
                         type="text"
@@ -135,14 +130,21 @@ export default function ProductsView() {
                         className="w-full border border-gray-300 rounded px-2 py-1"
                       />
                     </td>
+
+                    {/* ✅ CATEGORY FIELD (was showing code) */}
                     <td className="px-6 py-4">
                       <input
                         type="text"
                         value={editForm.category || ''}
-                        onChange={(e) => setEditForm({ ...editForm, category: e.target.value || null })}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, category: e.target.value || null })
+                        }
                         className="w-full border border-gray-300 rounded px-2 py-1"
+                        placeholder="Bread, Cake, etc."
                       />
                     </td>
+
+                    {/* UNIT */}
                     <td className="px-6 py-4">
                       <input
                         type="text"
@@ -152,6 +154,8 @@ export default function ProductsView() {
                         placeholder="ea, kg"
                       />
                     </td>
+
+                    {/* PRICE */}
                     <td className="px-6 py-4">
                       <input
                         type="number"
@@ -163,6 +167,8 @@ export default function ProductsView() {
                         className="w-24 border border-gray-300 rounded px-2 py-1"
                       />
                     </td>
+
+                    {/* ACTIONS */}
                     <td className="px-6 py-4 text-right space-x-2">
                       <button
                         onClick={() => saveProduct(editForm)}
@@ -180,25 +186,36 @@ export default function ProductsView() {
                   </>
                 ) : (
                   <>
+                    {/* ✅ DISPLAY CODE (was product_number) */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm font-mono font-semibold text-gray-900">
-                        {product.product_number || '—'}
+                        {product.code || '—'}
                       </span>
                     </td>
+
+                    {/* NAME */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">{product.name}</div>
                     </td>
+
+                    {/* CATEGORY */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm text-gray-500">{product.category || '—'}</span>
                     </td>
+
+                    {/* UNIT */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm text-gray-500">{product.unit}</span>
                     </td>
+
+                    {/* PRICE */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm text-gray-900">
                         ${product.price.toFixed(2)}
                       </span>
                     </td>
+
+                    {/* ACTIONS */}
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <button
                         onClick={() => {
