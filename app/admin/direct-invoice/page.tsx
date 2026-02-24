@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Trash2, FileText, DollarSign, Calendar } from 'lucide-react'
+import { Plus, Trash2, FileText, DollarSign, ArrowLeft } from 'lucide-react'
 
 interface Customer {
   id: string
@@ -39,6 +39,8 @@ export default function DirectInvoicePage() {
   const [formData, setFormData] = useState({
     customerId: '',
     deliveryDate: new Date().toISOString().split('T')[0],
+    purchaseOrderNumber: '',  // ✅ ADD
+    docketNumber: '',          // ✅ ADD
     notes: ''
   })
 
@@ -126,7 +128,7 @@ export default function DirectInvoicePage() {
         throw new Error('Please complete all line items')
       }
 
-      // ✅ Step 1: Get customer details
+      // ✅ Get customer details
       const { data: customer, error: customerError } = await supabase
         .from('customers')
         .select('*')
@@ -139,14 +141,14 @@ export default function DirectInvoicePage() {
 
       console.log('✅ Customer found:', customer.business_name)
 
-      // ✅ Step 2: Calculate total
+      // ✅ Calculate total
       const totalAmount = lineItems.reduce((sum, item) => {
         return sum + (item.quantity * item.unitPrice)
       }, 0)
 
       console.log('✅ Total amount:', totalAmount)
 
-      // ✅ Step 3: Create order
+      // ✅ Create order WITH PO AND DOCKET
       const { data: newOrder, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -159,7 +161,9 @@ export default function DirectInvoicePage() {
           total_amount: totalAmount,
           status: 'invoiced',
           source: 'direct_invoice',
-          notes: formData.notes || null
+          notes: formData.notes || null,
+          purchase_order_number: formData.purchaseOrderNumber || null,  // ✅ ADD
+          docket_number: formData.docketNumber || null                   // ✅ ADD
         })
         .select()
         .single()
@@ -171,7 +175,7 @@ export default function DirectInvoicePage() {
 
       console.log('✅ Order created:', newOrder.id)
 
-      // ✅ Step 4: Create order items
+      // ✅ Create order items
       const orderItems = lineItems.map(item => ({
         order_id: newOrder.id,
         product_id: item.productId,
@@ -194,7 +198,7 @@ export default function DirectInvoicePage() {
 
       console.log('✅ Order items created')
 
-      // ✅ Step 5: Create AR transaction
+      // ✅ Create AR transaction
       const paymentTerms = customer.payment_terms || 30
       const dueDate = new Date(formData.deliveryDate)
       dueDate.setDate(dueDate.getDate() + paymentTerms)
@@ -220,12 +224,14 @@ export default function DirectInvoicePage() {
       console.log('✅ AR transaction created')
 
       // ✅ Success!
-      alert(`Invoice created successfully!\n\nOrder ID: ${newOrder.id}\nTotal: ${formatCurrency(totalAmount)}\nDue Date: ${dueDate.toLocaleDateString()}`)
+      alert(`✅ Invoice Created Successfully!\n\nOrder ID: ${newOrder.id.slice(0, 8)}\nTotal: ${formatCurrency(totalAmount)}\nDue Date: ${dueDate.toLocaleDateString('en-AU')}\n${formData.purchaseOrderNumber ? `PO#: ${formData.purchaseOrderNumber}\n` : ''}${formData.docketNumber ? `Docket#: ${formData.docketNumber}` : ''}`)
       
       // Reset form
       setFormData({
         customerId: '',
         deliveryDate: new Date().toISOString().split('T')[0],
+        purchaseOrderNumber: '',  // ✅ RESET
+        docketNumber: '',          // ✅ RESET
         notes: ''
       })
       setLineItems([])
@@ -251,17 +257,15 @@ export default function DirectInvoicePage() {
 
   return (
     <div className="p-8">
-      {/* ✅ Add Back Button */}
-    <a
-      href="/admin"
-      className="flex items-center gap-1 text-sm mb-4 hover:opacity-80"
-      style={{ color: "#CE1126" }}
-    >
-      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-      </svg>
-      Back to Admin Dashboard
-    </a>
+      {/* Back Button */}
+      <a
+        href="/admin"
+        className="flex items-center gap-1 text-sm mb-4 hover:opacity-80"
+        style={{ color: "#CE1126" }}
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Admin Dashboard
+      </a>
 
       {/* Header */}
       <div className="mb-8">
@@ -281,12 +285,13 @@ export default function DirectInvoicePage() {
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Customer Selection */}
+        {/* Customer Details */}
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-xl font-bold mb-4">Customer Details</h2>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Customer Selection */}
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium mb-2">Customer *</label>
               <select
                 value={formData.customerId}
@@ -303,6 +308,7 @@ export default function DirectInvoicePage() {
               </select>
             </div>
 
+            {/* Delivery Date */}
             <div>
               <label className="block text-sm font-medium mb-2">Delivery Date *</label>
               <input
@@ -314,7 +320,36 @@ export default function DirectInvoicePage() {
               />
             </div>
 
-            <div className="col-span-2">
+            {/* ✅ Purchase Order Number */}
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Purchase Order Number (Optional)
+              </label>
+              <input
+                type="text"
+                value={formData.purchaseOrderNumber}
+                onChange={(e) => setFormData({ ...formData, purchaseOrderNumber: e.target.value })}
+                placeholder="e.g., PO-2024-1234"
+                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+
+            {/* ✅ Docket Number */}
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Docket Number (Optional)
+              </label>
+              <input
+                type="text"
+                value={formData.docketNumber}
+                onChange={(e) => setFormData({ ...formData, docketNumber: e.target.value })}
+                placeholder="e.g., DOC-5678"
+                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+
+            {/* Notes */}
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium mb-2">Notes</label>
               <textarea
                 value={formData.notes}
@@ -425,6 +460,8 @@ export default function DirectInvoicePage() {
               setFormData({
                 customerId: '',
                 deliveryDate: new Date().toISOString().split('T')[0],
+                purchaseOrderNumber: '',
+                docketNumber: '',
                 notes: ''
               })
               setLineItems([])
