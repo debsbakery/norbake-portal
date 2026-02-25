@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
             })
 
             await resend.emails.send({
-              from: 'debs_bakery@outlook.com',
+              from: "Deb's Bakery <noreply@debsbakery.store>",
               to: customer.email!,
               subject: `Monthly Statement - ${customer.business_name || customer.email}`,
               html: `

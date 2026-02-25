@@ -108,7 +108,7 @@ export async function POST(
 
     // Send email
     const { data, error } = await resend.emails.send({
-      from: 'debs_bakery@outlook.com',
+      from: "Deb's Bakery <noreply@debsbakery.store>",
       to: customer.email,
       subject: `Account Statement - ${customer.business_name || customer.email}`,
       html: `
