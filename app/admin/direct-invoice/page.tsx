@@ -317,7 +317,8 @@ export default function DirectInvoicePage() {
               <select
                 value={formData.customerId}
                 onChange={e => handleCustomerChange(e.target.value)}
-                requiredclassName="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-green-500"
+               required
+className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-green-500"
               >
                 <option value="">-- Select Customer --</option>
                 {customers.map(c => (
