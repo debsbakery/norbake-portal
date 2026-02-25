@@ -1,5 +1,5 @@
 export const dynamic = 'force-dynamic'
-
+import CreateCreditMemo from '@/components/credit-memos/CreateCreditMemo'
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { formatCurrency } from "@/lib/utils"
@@ -182,7 +182,7 @@ export default async function CustomerLedgerPage({
       <div className="mb-6">
         <StatementActions customer={customer} />
       </div>
-
+<CreateCreditMemo customerId={customer.id} />
       {/* Ledger Table */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
         <div className="p-6 border-b">
