@@ -173,7 +173,6 @@ export default function AdminClientView() {
   <Copy className="h-4 w-4" />
   Repeat Order
 </a>
-// Find the navigation buttons section and add this:
 <button
   onClick={() => setActiveTab('customers')}
   className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
