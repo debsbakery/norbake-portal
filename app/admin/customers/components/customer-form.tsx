@@ -24,9 +24,11 @@ interface Props {
 
 export default function CustomerForm({ customer, isEditing = false }: Props) {
   const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
-  const [success, setSuccess] = useState('')
+  const [loading,          setLoading]          = useState(false)
+  const [error,            setError]            = useState('')
+  const [success,          setSuccess]          = useState('')
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null)
+  const [allowDuplicate,   setAllowDuplicate]   = useState(false)
 
   const [form, setForm] = useState({
     business_name:  customer?.business_name  ?? '',
@@ -48,6 +50,7 @@ export default function CustomerForm({ customer, isEditing = false }: Props) {
     setLoading(true)
     setError('')
     setSuccess('')
+    setDuplicateWarning(null)
 
     try {
       const url    = isEditing ? `/api/admin/customers/${customer?.id}` : '/api/customers'
@@ -56,9 +59,20 @@ export default function CustomerForm({ customer, isEditing = false }: Props) {
       const res  = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          allow_duplicate_email: allowDuplicate,
+        }),
       })
       const data = await res.json()
+
+      // Soft duplicate email warning
+      if (data.duplicate_email) {
+        setDuplicateWarning(data.existing_business)
+        setLoading(false)
+        return
+      }
+
       if (data.error) throw new Error(data.error)
 
       setSuccess(isEditing ? '✅ Customer updated!' : '✅ Customer created!')
@@ -76,12 +90,60 @@ export default function CustomerForm({ customer, isEditing = false }: Props) {
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 space-y-5">
 
-      {error   && <div className="bg-red-50 border border-red-200 rounded p-3 text-red-700 text-sm">❌ {error}</div>}
-      {success && <div className="bg-green-50 border border-green-200 rounded p-3 text-green-700 text-sm">{success}</div>}
+      {error   && (
+        <div className="bg-red-50 border border-red-200 rounded p-3 text-red-700 text-sm">
+          ❌ {error}
+        </div>
+      )}
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded p-3 text-green-700 text-sm">
+          {success}
+        </div>
+      )}
+
+      {/* Shared email warning */}
+      {duplicateWarning && (
+        <div className="bg-amber-50 border border-amber-300 rounded-lg p-4">
+          <p className="text-amber-800 font-semibold text-sm">
+            ⚠️ Email already used by &ldquo;{duplicateWarning}&rdquo;
+          </p>
+          <p className="text-amber-700 text-xs mt-1">
+            This is fine if they share a billing email address. Confirm to proceed.
+          </p>
+          <div className="flex gap-2 mt-3">
+            <button
+              type="button"
+              onClick={() => {
+                setAllowDuplicate(true)
+                setDuplicateWarning(null)
+                // Re-submit automatically
+                setTimeout(() => {
+                  document.getElementById('customer-submit-btn')?.click()
+                }, 100)
+              }}
+              className="px-4 py-2 bg-amber-600 text-white text-sm rounded-md hover:bg-amber-700"
+            >
+              Yes, share this email
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDuplicateWarning(null)
+                setAllowDuplicate(false)
+              }}
+              className="px-4 py-2 border border-amber-400 text-amber-700 text-sm rounded-md hover:bg-amber-50"
+            >
+              Cancel — use different email
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Business Name */}
       <div>
-        <label className={labelClass}>Business Name <span className="text-red-500">*</span></label>
+        <label className={labelClass}>
+          Business Name <span className="text-red-500">*</span>
+        </label>
         <input
           type="text" required value={form.business_name}
           onChange={e => set('business_name', e.target.value)}
@@ -91,7 +153,9 @@ export default function CustomerForm({ customer, isEditing = false }: Props) {
 
       {/* Contact Name */}
       <div>
-        <label className={labelClass}>Contact Name <span className="text-red-500">*</span></label>
+        <label className={labelClass}>
+          Contact Name <span className="text-red-500">*</span>
+        </label>
         <input
           type="text" required value={form.contact_name}
           onChange={e => set('contact_name', e.target.value)}
@@ -101,15 +165,19 @@ export default function CustomerForm({ customer, isEditing = false }: Props) {
 
       {/* Email */}
       <div>
-        <label className={labelClass}>Email <span className="text-red-500">*</span></label>
+        <label className={labelClass}>
+          Email <span className="text-red-500">*</span>
+        </label>
         <input
           type="email" required value={form.email}
           onChange={e => set('email', e.target.value)}
           className={inputClass} placeholder="deb@cafe.com.au"
-          disabled={isEditing} // don't allow email change on edit
+          disabled={isEditing}
         />
         {isEditing && (
-          <p className="text-xs text-gray-400 mt-1">Email cannot be changed after creation</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Email cannot be changed after creation
+          </p>
         )}
       </div>
 
@@ -143,7 +211,7 @@ export default function CustomerForm({ customer, isEditing = false }: Props) {
         />
       </div>
 
-      {/* Payment Terms + Status side by side */}
+      {/* Payment Terms + Status */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className={labelClass}>Payment Terms</label>
@@ -183,23 +251,3 @@ export default function CustomerForm({ customer, isEditing = false }: Props) {
           placeholder="Leave at back door, call on arrival, etc."
         />
       </div>
-
-      {/* Actions */}
-      <div className="flex gap-3 pt-4 border-t">
-        <button
-          type="submit" disabled={loading}
-          className="flex-1 py-3 rounded-md text-white font-semibold hover:opacity-90 disabled:opacity-50"
-          style={{ backgroundColor: '#006A4E' }}
-        >
-          {loading ? '💾 Saving...' : isEditing ? '✅ Update Customer' : '✨ Add Customer'}
-        </button>
-        <button
-          type="button" onClick={() => router.back()} disabled={loading}
-          className="px-6 py-3 rounded-md border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
-  )
-}

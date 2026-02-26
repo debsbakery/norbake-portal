@@ -37,8 +37,9 @@ export async function POST(request: NextRequest) {
       address,
       abn,
       delivery_notes,
-      status = 'active',
-      payment_terms = 30,
+      status            = 'active',
+      payment_terms     = 30,
+      allow_duplicate_email = false,
     } = body
 
     // Validate required fields
@@ -52,24 +53,30 @@ export async function POST(request: NextRequest) {
     // Check for duplicate email
     const { data: existing } = await supabaseAdmin
       .from('customers')
-      .select('id')
+      .select('id, business_name')
       .eq('email', email.trim().toLowerCase())
       .maybeSingle()
 
-    if (existing) {
+    // Soft warning — allow if admin confirmed
+    if (existing && !allow_duplicate_email) {
       return NextResponse.json(
-        { error: 'A customer with this email already exists' },
+        {
+          error:             `Email already used by "${existing.business_name}"`,
+          duplicate_email:   true,
+          existing_business: existing.business_name,
+        },
         { status: 409 }
       )
     }
 
-    // Create auth user so they can log into portal later
+    // Try to create auth user — may fail if email already exists in auth
     const { data: authUser } = await supabaseAdmin.auth.admin.createUser({
       email:         email.trim().toLowerCase(),
       email_confirm: false,
       user_metadata: { business_name, contact_name, role: 'customer' },
     })
 
+    // If auth user already exists (shared email), use a new UUID for this customer
     const customerId = authUser?.user?.id || crypto.randomUUID()
 
     // Insert customer record
@@ -95,6 +102,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, id: customerId })
+
   } catch (error: any) {
     console.error('❌ Error creating customer:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
