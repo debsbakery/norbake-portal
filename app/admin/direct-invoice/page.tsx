@@ -1,4 +1,4 @@
-ï»¿'use client'
+'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -100,7 +100,7 @@ export default function DirectInvoicePage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [formData, setFormData] = useState({ customerId: '', deliveryDate: new Date().toISOString().split('T')[0], purchaseOrderNumber: '', docketNumber: '', notes: '' })
-  const supabase = createClient()
+  const supabase = await createClient()
 
   useEffect(() => {
     supabase.from('customers').select('*').order('business_name').then(({ data }) => { if (data) setCustomers(data) })
@@ -192,7 +192,7 @@ export default function DirectInvoicePage() {
             <div className="md:col-span-2">
               <label className="block text-sm font-medium mb-2">Customer <span className="text-red-500">*</span></label>
               <SearchableSelect options={customerOptions} value={formData.customerId} onChange={handleCustomerChange} placeholder="Search customer by name..." />
-              {selectedCustomer && <p className="text-sm text-gray-500 mt-1.5">Balance: <span className={selectedCustomer.balance > 0 ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>{fmt(selectedCustomer.balance || 0)}</span> Â· Terms: {selectedCustomer.payment_terms || 30} days</p>}
+              {selectedCustomer && <p className="text-sm text-gray-500 mt-1.5">Balance: <span className={selectedCustomer.balance > 0 ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>{fmt(selectedCustomer.balance || 0)}</span> · Terms: {selectedCustomer.payment_terms || 30} days</p>}
             </div>
             <div>
               <label className="block text-sm font-medium mb-2">Delivery Date *</label>
@@ -254,12 +254,12 @@ export default function DirectInvoicePage() {
                       <select value={item.creditPercent} onChange={e => updateLineItem(item.id, 'creditPercent', parseFloat(e.target.value))} className="w-full border rounded px-1 py-1.5 text-sm bg-white">
                         {CREDIT_PERCENTS.map(p => <option key={p} value={p}>{p}%</option>)}
                       </select>
-                    ) : <span className="text-gray-300 text-xs pl-2">â€”</span>}
+                    ) : <span className="text-gray-300 text-xs pl-2">—</span>}
                   </div>
                   <div className="col-span-1 flex justify-center pt-2">
                     {item.isCredit ? (
                       <input type="checkbox" title="Mark as stale return" checked={item.creditType === 'stale_return'} onChange={e => updateLineItem(item.id, 'creditType', e.target.checked ? 'stale_return' : 'product_credit')} />
-                    ) : <span className="text-gray-300 text-xs">â€”</span>}
+                    ) : <span className="text-gray-300 text-xs">—</span>}
                   </div>
                   <div className={['col-span-1 text-sm font-medium text-right pt-2', item.isCredit ? 'text-orange-600' : 'text-gray-800'].join(' ')}>
                     {item.isCredit ? `(${fmt(Math.abs(lineTotal(item)))})` : fmt(lineTotal(item))}
