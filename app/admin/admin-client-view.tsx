@@ -1,8 +1,10 @@
 'use client';
-import { BarChart3, Clock, RefreshCw, Play, ChefHat, FileText, Receipt, Copy, Package, Truck, DollarSign, ShoppingCart } from 'lucide-react'
+
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { 
+  Clock,
+  BarChart3,
   Package, 
   RefreshCw,
   Truck,
