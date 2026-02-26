@@ -184,7 +184,11 @@ export default function DirectInvoicePage() {
         .single()
 
       if (orderError) throw new Error(`Order creation failed: ${orderError.message}`)
-
+// Sort line items — 900 (manual adjustment) always first
+const sortedItems = [
+  ...lineItems.filter(i => i.productCode === '900'),
+  ...lineItems.filter(i => i.productCode !== '900'),
+]
       // Create order items
       const { error: itemsError } = await supabase.from('order_items').insert(
         lineItems.map(item => ({

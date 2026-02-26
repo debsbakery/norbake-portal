@@ -1,5 +1,5 @@
 'use client';
-
+import { BarChart3 } from 'lucide-react'  // add to imports
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { 
@@ -146,6 +146,14 @@ export default function AdminClientView() {
                 <Receipt className="h-4 w-4" />
                 Direct Invoice
               </a>
+{/* GST Report Button */}
+<a
+  href="/admin/gst-report"
+  className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 shadow-md transition-all"
+>
+  <BarChart3 className="h-4 w-4" />
+  GST Report
+</a>
 
             {/* Repeat Order Button */}
 <a

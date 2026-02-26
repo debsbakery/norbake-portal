@@ -11,20 +11,24 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Calculate correct balance from orders
-    const { data: orders } = await supabase
-      .from('orders')
-      .select('total_amount, amount_paid')
-      .eq('customer_id', customerId)
+    const [
+      { data: orders },
+      { data: payments },
+      { data: credits },
+    ] = await Promise.all([
+      supabase.from('orders').select('total_amount').eq('customer_id', customerId),
+      supabase.from('payments').select('amount').eq('customer_id', customerId),
+      supabase.from('credit_memos').select('total_amount, amount').eq('customer_id', customerId),
+    ])
 
-    const calculatedBalance = (orders || []).reduce((sum, order) => {
-      return sum + (order.total_amount - (order.amount_paid || 0))
-    }, 0)
+    const balance =
+      (orders   || []).reduce((s, o) => s + parseFloat(o.total_amount || '0'), 0) -
+      (payments || []).reduce((s, p) => s + parseFloat(p.amount || '0'), 0) -
+      (credits  || []).reduce((s, c) => s + Math.abs(parseFloat(c.total_amount || c.amount || '0')), 0)
 
-    // Update customer balance
     const { error } = await supabase
       .from('customers')
-      .update({ balance: calculatedBalance })
+      .update({ balance })
       .eq('id', customerId)
 
     if (error) throw error
