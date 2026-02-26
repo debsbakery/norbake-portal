@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Plus, Trash2, FileText, DollarSign, ArrowLeft, MinusCircle, Search, ChevronDown, X } from 'lucide-react'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 interface Customer {
   id: string
   business_name: string
@@ -42,7 +41,6 @@ interface LineItem {
 
 const CREDIT_PERCENTS = [100, 75, 50, 25]
 
-// ─── Searchable Select Component ──────────────────────────────────────────────
 interface SelectOption {
   value: string
   label: string
@@ -104,17 +102,15 @@ function SearchableSelect({
 
   return (
     <div className="relative w-full" ref={containerRef}>
-      {/* Trigger button */}
       <button
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setOpen(o => !o)}
-        className={`
-          w-full flex items-center justify-between gap-2 border rounded-md px-3 py-2 text-sm text-left bg-white
-          transition-colors focus:outline-none
-          ${disabled ? 'bg-gray-50 cursor-not-allowed text-gray-400' : 'cursor-pointer hover:border-gray-400'}
-          ${open ? 'border-green-700 ring-2 ring-green-100' : 'border-gray-300'}
-        `}
+        className={[
+          'w-full flex items-center justify-between gap-2 border rounded-md px-3 py-2 text-sm text-left bg-white transition-colors focus:outline-none',
+          disabled ? 'bg-gray-50 cursor-not-allowed text-gray-400' : 'cursor-pointer hover:border-gray-400',
+          open ? 'border-green-700 ring-2 ring-green-100' : 'border-gray-300',
+        ].join(' ')}
       >
         <span className="flex-1 truncate flex items-center gap-2">
           {selected ? (
@@ -143,10 +139,8 @@ function SearchableSelect({
         </span>
       </button>
 
-      {/* Dropdown panel */}
       {open && (
         <div className="absolute z-50 mt-1 w-full min-w-[260px] bg-white border border-gray-200 rounded-md shadow-xl flex flex-col max-h-72">
-          {/* Search input */}
           <div className="p-2 border-b bg-white">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
@@ -160,8 +154,6 @@ function SearchableSelect({
               />
             </div>
           </div>
-
-          {/* Options */}
           <div className="overflow-y-auto flex-1">
             {filtered.length === 0 ? (
               <div className="px-3 py-4 text-sm text-gray-400 text-center">
@@ -173,11 +165,10 @@ function SearchableSelect({
                   key={opt.value}
                   type="button"
                   onMouseDown={() => handleSelect(opt)}
-                  className={`
-                    w-full text-left px-3 py-2.5 text-sm flex items-center gap-2
-                    border-b border-gray-50 hover:bg-green-50 transition-colors
-                    ${opt.value === value ? 'bg-green-50 font-semibold' : ''}
-                  `}
+                  className={[
+                    'w-full text-left px-3 py-2.5 text-sm flex items-center gap-2 border-b border-gray-50 hover:bg-green-50 transition-colors',
+                    opt.value === value ? 'bg-green-50 font-semibold' : '',
+                  ].join(' ')}
                 >
                   {opt.badge && (
                     <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 shrink-0 min-w-[2.5rem] text-center">
@@ -194,7 +185,6 @@ function SearchableSelect({
               ))
             )}
           </div>
-
           {query && (
             <div className="px-3 py-1 text-xs text-gray-400 border-t bg-gray-50">
               {filtered.length} result{filtered.length !== 1 ? 's' : ''}
@@ -206,7 +196,6 @@ function SearchableSelect({
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function DirectInvoicePage() {
   const [customers,        setCustomers]        = useState<Customer[]>([])
   const [products,         setProducts]         = useState<Product[]>([])
@@ -214,7 +203,6 @@ export default function DirectInvoicePage() {
   const [loading,          setLoading]          = useState(false)
   const [error,            setError]            = useState<string | null>(null)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-
   const [formData, setFormData] = useState({
     customerId:          '',
     deliveryDate:        new Date().toISOString().split('T')[0],
@@ -240,7 +228,6 @@ export default function DirectInvoicePage() {
       .then(({ data }) => { if (data) setProducts(data) })
   }, [])
 
-  // ── Dropdown option builders ────────────────────────────────────────────────
   const customerOptions: SelectOption[] = customers.map(c => ({
     value:    c.id,
     label:    c.business_name || c.email,
@@ -260,7 +247,6 @@ export default function DirectInvoicePage() {
     }
   })
 
-  // ── Handlers ────────────────────────────────────────────────────────────────
   function handleCustomerChange(id: string) {
     const c = customers.find(c => c.id === id) || null
     setSelectedCustomer(c)
@@ -287,23 +273,14 @@ export default function DirectInvoicePage() {
     setLineItems(prev => prev.map(item => {
       if (item.id !== id) return item
       if (field === 'productId') {
-        if (!value) return {
-          ...item,
-          productId:   '',
-          productName: '',
-          productCode: '',
-          unitPrice:   0,
-          isCustom:    false,
-        }
-        const p = products.find(p => p.id === value)
+        if (!value) return { ...item, productId: '', productName: '', productCode: '', unitPrice: 0, isCustom: false }
+        const p   = products.find(p => p.id === value)
         if (!p) return item
-        // ✅ Check BOTH fields — DB has code='900', product_code=null
         const is900 = p.code === '900' || p.product_code === 900
         return {
           ...item,
           productId:     p.id,
           productName:   is900 ? '' : p.name,
-          // ✅ FIX: store p.code not p.product_number so sort filter works
           productCode:   p.code || p.product_number || p.product_code?.toString() || '',
           unitPrice:     is900 ? 0 : (p.unit_price || p.price || 0),
           gstApplicable: is900 ? false : (p.gst_applicable ?? true),
@@ -354,7 +331,6 @@ export default function DirectInvoicePage() {
     setError(null)
   }
 
-  // ── Submit ───────────────────────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -372,13 +348,11 @@ export default function DirectInvoicePage() {
 
       const customer = selectedCustomer!
 
-      // ✅ Sort: 900 lines always first in the invoice
       const sortedItems = [
         ...lineItems.filter(i => i.productCode === '900'),
         ...lineItems.filter(i => i.productCode !== '900'),
       ]
 
-      // Create order
       const { data: newOrder, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -400,7 +374,6 @@ export default function DirectInvoicePage() {
 
       if (orderError) throw new Error(`Order creation failed: ${orderError.message}`)
 
-      // ✅ FIX: insert sortedItems (was lineItems before — sort had no effect)
       const { error: itemsError } = await supabase
         .from('order_items')
         .insert(
@@ -420,7 +393,6 @@ export default function DirectInvoicePage() {
         throw new Error(`Order items failed: ${itemsError.message}`)
       }
 
-      // AR transaction
       const paymentTerms = customer.payment_terms || 30
       const dueDate      = new Date(formData.deliveryDate)
       dueDate.setDate(dueDate.getDate() + paymentTerms)
@@ -437,13 +409,11 @@ export default function DirectInvoicePage() {
 
       if (arError) throw new Error(`AR transaction failed: ${arError.message}`)
 
-      // Update customer balance
       await supabase
         .from('customers')
         .update({ balance: (customer.balance || 0) + grandTotal })
         .eq('id', formData.customerId)
 
-      // Credit memo if credit lines exist
       if (hasCredits) {
         try {
           const creditLines    = lineItems.filter(i => i.isCredit)
@@ -516,7 +486,6 @@ export default function DirectInvoicePage() {
     }
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="p-8 max-w-5xl mx-auto">
       <a
@@ -543,7 +512,6 @@ export default function DirectInvoicePage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
 
-        {/* ── Customer Details ── */}
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-xl font-bold mb-4">Customer Details</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -612,10 +580,10 @@ export default function DirectInvoicePage() {
                 placeholder="Optional notes..."
               />
             </div>
+
           </div>
         </div>
 
-        {/* ── Line Items ── */}
         <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold">Line Items</h2>
@@ -639,12 +607,10 @@ export default function DirectInvoicePage() {
           </div>
 
           {lineItems.length === 0 ? (
-            <p className="text-gray-400 text-center py-8">
-              Add charge or credit lines above
-            </p>
+            <p className="text-gray-400 text-center py-8">Add charge or credit lines above</p>
           ) : (
             <div className="space-y-2">
-              {/* Column headers */}
+
               <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 px-1 pb-1 border-b">
                 <span className="col-span-1">Type</span>
                 <span className="col-span-4">Product</span>
@@ -659,24 +625,20 @@ export default function DirectInvoicePage() {
               {lineItems.map(item => (
                 <div
                   key={item.id}
-                  className={`grid grid-cols-12 gap-2 items-start p-2 rounded ${
-                    item.isCredit
-                      ? 'bg-orange-50 border border-orange-100'
-                      : 'bg-gray-50'
-                  }`}
+                  className={[
+                    'grid grid-cols-12 gap-2 items-start p-2 rounded',
+                    item.isCredit ? 'bg-orange-50 border border-orange-100' : 'bg-gray-50',
+                  ].join(' ')}
                 >
-                  {/* Type badge */}
                   <div className="col-span-1 pt-2">
-                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-                      item.isCredit
-                        ? 'bg-orange-200 text-orange-800'
-                        : 'bg-green-100 text-green-800'
-                    }`}>
+                    <span className={[
+                      'text-xs px-1.5 py-0.5 rounded font-medium',
+                      item.isCredit ? 'bg-orange-200 text-orange-800' : 'bg-green-100 text-green-800',
+                    ].join(' ')}>
                       {item.isCredit ? 'CR' : 'DR'}
                     </span>
                   </div>
 
-                  {/* Product searchable dropdown */}
                   <div className="col-span-4">
                     <SearchableSelect
                       options={productOptions}
@@ -684,7 +646,6 @@ export default function DirectInvoicePage() {
                       onChange={val => updateLineItem(item.id, 'productId', val)}
                       placeholder="Select product..."
                     />
-                    {/* Description input for code 900 */}
                     {item.isCustom && (
                       <input
                         type="text"
@@ -696,7 +657,6 @@ export default function DirectInvoicePage() {
                     )}
                   </div>
 
-                  {/* Quantity */}
                   <div className="col-span-1">
                     <input
                       type="number"
@@ -704,11 +664,10 @@ export default function DirectInvoicePage() {
                       step="0.1"
                       value={item.quantity}
                       onChange={e => updateLineItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                      className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-400"
+                      className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none"
                     />
                   </div>
 
-                  {/* Unit price */}
                   <div className="col-span-2">
                     <input
                       type="number"
@@ -716,11 +675,10 @@ export default function DirectInvoicePage() {
                       step="0.01"
                       value={item.unitPrice}
                       onChange={e => updateLineItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                      className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-400"
+                      className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none"
                     />
                   </div>
 
-                  {/* Credit % */}
                   <div className="col-span-1">
                     {item.isCredit ? (
                       <select
@@ -737,9 +695,6 @@ export default function DirectInvoicePage() {
                     )}
                   </div>
 
-                  {/* Stale return checkbox */}
-                  <div className="col-span-1 flex justify-center pt-2">
-                  {/* Stale return checkbox */}
                   <div className="col-span-1 flex justify-center pt-2">
                     {item.isCredit ? (
                       <input
@@ -757,17 +712,16 @@ export default function DirectInvoicePage() {
                     )}
                   </div>
 
-                  {/* Line total */}
-                  <div className={`col-span-1 text-sm font-medium text-right pt-2 ${
-                    item.isCredit ? 'text-orange-600' : 'text-gray-800'
-                  }`}>
+                  <div className={[
+                    'col-span-1 text-sm font-medium text-right pt-2',
+                    item.isCredit ? 'text-orange-600' : 'text-gray-800',
+                  ].join(' ')}>
                     {item.isCredit
                       ? `(${fmt(Math.abs(lineTotal(item)))})`
                       : fmt(lineTotal(item))
                     }
                   </div>
 
-                  {/* Delete button */}
                   <div className="col-span-1 flex justify-center pt-1.5">
                     <button
                       type="button"
@@ -777,56 +731,10 @@ export default function DirectInvoicePage() {
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
+
                 </div>
               ))}
 
-              {/* Totals */}
               <div className="border-t-2 pt-4 mt-2 space-y-1 text-right">
                 <div className="text-sm text-gray-600">
                   Subtotal: <span className="font-medium ml-2">{fmt(subtotal)}</span>
-                </div>
-                <div className="text-sm text-gray-600">
-                  GST (10%): <span className="font-medium ml-2">{fmt(gstTotal)}</span>
-                </div>
-                <div
-                  className="text-xl font-bold"
-                  style={{ color: grandTotal < 0 ? '#CE1126' : '#006A4E' }}
-                >
-                  Total: {grandTotal < 0 ? `(${fmt(Math.abs(grandTotal))})` : fmt(grandTotal)}
-                </div>
-                {hasCredits && (
-                  <p className="text-xs text-orange-600">
-                    ⚠️ Includes credit lines — a credit memo will also be recorded
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Submit ── */}
-        <div className="flex justify-end gap-3 pb-8">
-          <button
-            type="button"
-            onClick={resetForm}
-            className="px-6 py-3 border rounded-md hover:bg-gray-50 transition-colors"
-          >
-            Clear
-          </button>
-          <button
-            type="submit"
-            disabled={loading || !lineItems.length}
-            className="flex items-center gap-2 px-6 py-3 rounded text-white font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
-            style={{ backgroundColor: '#CE1126' }}
-          >
-            <DollarSign className="h-5 w-5" />
-            {loading ? 'Creating...' : 'Create Invoice'}
-          </button>
-        </div>
-      </form>
-    </div>
-  )
-}                    {item.isCredit ? (
-                      <input
-                        type="checkbox"
-                        title="Mark as stale return
