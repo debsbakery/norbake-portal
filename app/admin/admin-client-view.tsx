@@ -154,7 +154,14 @@ export default function AdminClientView() {
   <BarChart3 className="h-4 w-4" />
   GST Report
 </a>
-
+<a
+  href="/admin/customers/pending"
+  className="flex items-center gap-2 px-4 py-2 text-white text-sm rounded-md hover:opacity-90 shadow-md"
+  style={{ backgroundColor: '#ea580c' }}
+>
+  <Clock className="h-4 w-4" />
+  Pending Approvals
+</a>
             {/* Repeat Order Button */}
 <a
   href="/admin/customers/repeat-order-search"
