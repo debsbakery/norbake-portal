@@ -54,7 +54,7 @@ function SearchableSelect({ options, value, onChange, placeholder = 'Search...',
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const selected = options.find(o => o.value === value)
-  const filtered = query.trim() === '' ? options : options.filter(o => { const q = query.toLowerCase(); return o.label.toLowerCase().includes(q) || (o.badge ?? '').toLowerCase().includes(q) || (o.sublabel ?? '').toLowerCase().includes(q) })
+  const filtered = query.trim() === '' ? options : options.filter(o => { const q = query.toLowerCase(); return String(o.label ?? '').toLowerCase().includes(q) || String(o.badge ?? '').toLowerCase().includes(q) || String(o.sublabel ?? '').toLowerCase().includes(q) })
   useEffect(() => { function handleClick(e: MouseEvent) { if (containerRef.current && !containerRef.current.contains(e.target as Node)) { setOpen(false); setQuery('') } } document.addEventListener('mousedown', handleClick); return () => document.removeEventListener('mousedown', handleClick) }, [])
   useEffect(() => { if (open) inputRef.current?.focus() }, [open])
   function handleSelect(opt: SelectOption) { onChange(opt.value); setOpen(false); setQuery('') }
@@ -289,3 +289,4 @@ export default function DirectInvoicePage() {
     </div>
   )
 }
+
