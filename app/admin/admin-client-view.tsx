@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import {
   Clock, Users, BarChart3, Package, RefreshCw, Truck,
   DollarSign, FileText, ShoppingCart, ChefHat, Receipt,
-  Copy, Play, FileMinus,
+  Copy, Play, ClipboardList, FileMinus,
 } from 'lucide-react';
 
 import OrdersView from './orders-view';
