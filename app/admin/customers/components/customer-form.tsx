@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface Customer {
@@ -29,9 +29,6 @@ export default function CustomerForm({ customer, isEditing = false }: Props) {
   const [success,          setSuccess]          = useState('')
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null)
 
-  // Use a ref so we can pass the flag without triggering re-renders
-  const allowDuplicateRef = useRef(false)
-
   const [form, setForm] = useState({
     business_name:  customer?.business_name  ?? '',
     contact_name:   customer?.contact_name   ?? '',
@@ -59,14 +56,13 @@ export default function CustomerForm({ customer, isEditing = false }: Props) {
       const res  = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-     body: JSON.stringify({
-  ...form,  // email is already in here ✅
-  allow_duplicate_email: allowDuplicate,
-}),
+        body: JSON.stringify({
+          ...form,
+          allow_duplicate_email: allowDuplicate,
+        }),
       })
       const data = await res.json()
 
-      // Soft duplicate warning — show banner
       if (data.duplicate_email) {
         setDuplicateWarning(data.existing_business)
         setLoading(false)
@@ -75,7 +71,7 @@ export default function CustomerForm({ customer, isEditing = false }: Props) {
 
       if (data.error) throw new Error(data.error)
 
-      setSuccess(isEditing ? '✅ Customer updated!' : '✅ Customer created!')
+      setSuccess(isEditing ? 'Customer updated!' : 'Customer created!')
       setTimeout(() => router.push('/admin/customers'), 1200)
     } catch (err: any) {
       setError(err.message)
@@ -84,16 +80,14 @@ export default function CustomerForm({ customer, isEditing = false }: Props) {
     }
   }
 
-  // Normal form submit — no duplicate allowed yet
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     await submitForm(false)
   }
 
-  // Called when admin confirms shared email
   async function handleConfirmDuplicate() {
     setDuplicateWarning(null)
-    await submitForm(true)  // ✅ pass true directly — no state, no loop
+    await submitForm(true)
   }
 
   const inputClass = "w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
@@ -102,28 +96,28 @@ export default function CustomerForm({ customer, isEditing = false }: Props) {
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 space-y-5">
 
-      {error   && (
+      {error && (
         <div className="bg-red-50 border border-red-200 rounded p-3 text-red-700 text-sm">
-          ❌ {error}
+          {error}
         </div>
       )}
+
       {success && (
         <div className="bg-green-50 border border-green-200 rounded p-3 text-green-700 text-sm">
           {success}
         </div>
       )}
 
-      {/* Shared email warning */}
       {duplicateWarning && (
         <div className="bg-amber-50 border border-amber-300 rounded-lg p-4">
           <p className="text-amber-800 font-semibold text-sm">
-            ⚠️ Email already used by &ldquo;{duplicateWarning}&rdquo;
+            Warning: Email already used by &ldquo;{duplicateWarning}&rdquo;
           </p>
           <p className="text-amber-700 text-xs mt-1">
             Fine for invoicing — both customers will receive emails at this address.
           </p>
           <p className="text-amber-700 text-xs mt-1 font-semibold">
-            ⚠️ Note: Shared email customers cannot use the online portal separately.
+            Note: Shared email customers cannot use the online portal separately.
           </p>
           <div className="flex gap-2 mt-3">
             <button
@@ -144,72 +138,81 @@ export default function CustomerForm({ customer, isEditing = false }: Props) {
         </div>
       )}
 
-      {/* Business Name */}
       <div>
         <label className={labelClass}>
           Business Name <span className="text-red-500">*</span>
         </label>
         <input
-          type="text" required value={form.business_name}
+          type="text"
+          required
+          value={form.business_name}
           onChange={e => set('business_name', e.target.value)}
-          className={inputClass} placeholder="Deb's Cafe"
+          className={inputClass}
+          placeholder="Deb's Cafe"
         />
       </div>
 
-      {/* Contact Name */}
       <div>
         <label className={labelClass}>
           Contact Name <span className="text-red-500">*</span>
         </label>
         <input
-          type="text" required value={form.contact_name}
+          type="text"
+          required
+          value={form.contact_name}
           onChange={e => set('contact_name', e.target.value)}
-          className={inputClass} placeholder="Debbie Smith"
+          className={inputClass}
+          placeholder="Debbie Smith"
         />
       </div>
 
-      {/* Email */}
       <div>
         <label className={labelClass}>
           Email <span className="text-red-500">*</span>
         </label>
-       // ✅ REPLACE WITH - always editable
-<input
-  type="email" required value={form.email}
-  onChange={e => set('email', e.target.value)}
-  className={inputClass} placeholder="deb@cafe.com.au"
-/>
-      {/* Phone */}
+        <input
+          type="email"
+          required
+          value={form.email}
+          onChange={e => set('email', e.target.value)}
+          className={inputClass}
+          placeholder="deb@cafe.com.au"
+        />
+      </div>
+
       <div>
         <label className={labelClass}>Phone</label>
         <input
-          type="tel" value={form.phone}
+          type="tel"
+          value={form.phone}
           onChange={e => set('phone', e.target.value)}
-          className={inputClass} placeholder="04xx xxx xxx"
+          className={inputClass}
+          placeholder="04xx xxx xxx"
         />
       </div>
 
-      {/* Address */}
       <div>
         <label className={labelClass}>Delivery Address</label>
         <input
-          type="text" value={form.address}
+          type="text"
+          value={form.address}
           onChange={e => set('address', e.target.value)}
-          className={inputClass} placeholder="123 Main St, Suburb VIC 3000"
+          className={inputClass}
+          placeholder="123 Main St, Suburb VIC 3000"
         />
       </div>
 
-      {/* ABN */}
       <div>
         <label className={labelClass}>ABN</label>
         <input
-          type="text" value={form.abn}
+          type="text"
+          value={form.abn}
           onChange={e => set('abn', e.target.value)}
-          className={inputClass} placeholder="12 345 678 901"
+          className={inputClass}
+          placeholder="12 345 678 901"
         />
       </div>
 
-      {/* Payment Terms + Status */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className={labelClass}>Payment Terms</label>
@@ -232,25 +235,24 @@ export default function CustomerForm({ customer, isEditing = false }: Props) {
             onChange={e => set('status', e.target.value)}
             className={inputClass}
           >
-            <option value="active">✅ Active</option>
-            <option value="pending">⏳ Pending</option>
-            <option value="inactive">❌ Inactive</option>
+            <option value="active">Active</option>
+            <option value="pending">Pending</option>
+            <option value="inactive">Inactive</option>
           </select>
         </div>
       </div>
 
-      {/* Delivery Notes */}
       <div>
         <label className={labelClass}>Delivery Notes</label>
         <textarea
           value={form.delivery_notes}
           onChange={e => set('delivery_notes', e.target.value)}
-          className={inputClass} rows={3}
+          className={inputClass}
+          rows={3}
           placeholder="Leave at back door, call on arrival, etc."
         />
       </div>
 
-      {/* Actions */}
       <div className="flex gap-3 pt-4 border-t">
         <button
           type="submit"
@@ -258,7 +260,7 @@ export default function CustomerForm({ customer, isEditing = false }: Props) {
           className="flex-1 py-3 rounded-md text-white font-semibold hover:opacity-90 disabled:opacity-50"
           style={{ backgroundColor: '#006A4E' }}
         >
-          {loading ? '💾 Saving...' : isEditing ? '✅ Update Customer' : '✨ Add Customer'}
+          {loading ? 'Saving...' : isEditing ? 'Update Customer' : 'Add Customer'}
         </button>
         <button
           type="button"
