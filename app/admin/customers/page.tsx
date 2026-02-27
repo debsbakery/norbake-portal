@@ -6,8 +6,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { ArrowLeft, Plus, Edit, Users } from 'lucide-react'
 import Link from 'next/link'
 
-export default async function CustomersPage() {
-  const isAdmin = await checkAdmin()
+export default async function AdminCustomersPage() {  const isAdmin = await checkAdmin()
   if (!isAdmin) redirect('/')
 
   const supabase = await createServiceClient()
