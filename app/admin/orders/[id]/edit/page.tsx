@@ -16,29 +16,30 @@ export default async function AdminEditOrderPage({
   const supabase = await createClient()
 
   // ✅ FIX: Use product_number not code
-  const { data: order, error } = await supabase
-    .from('orders')
-    .select(`
-      *,
-      order_items (
+ const { data: order, error } = await supabase
+  .from('orders')
+  .select(`
+    *,
+    order_items (
+      id,
+      product_id,
+      quantity,
+      unit_price,
+      subtotal,
+      product_name,
+      gst_applicable,
+      products:product_id (
         id,
-        quantity,
+        name,
+        product_number,
+        price,
         unit_price,
-        subtotal,
-        product_name,
-        gst_applicable,
-        products (
-          id,
-          name,
-          product_number,
-          price,
-          unit_price,
-          gst_applicable
-        )
+        gst_applicable
       )
-    `)
-    .eq('id', id)
-    .single()
+    )
+  `)
+  .eq('id', id)
+  .single()
 
   if (error || !order) {
     redirect('/admin?error=order-not-found')
