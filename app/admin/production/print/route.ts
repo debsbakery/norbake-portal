@@ -14,15 +14,29 @@ async function checkAdmin() {
   }
 }
 
-// ── Fetch and aggregate ALL dates into one product list ───────────────────────
+function getBrisbaneDate(): string {
+  const now      = new Date();
+  const brisbane = new Date(now.getTime() + 10 * 60 * 60 * 1000);
+  return brisbane.toISOString().split('T')[0];
+}
+
+function getDayOfWeek(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00.000Z');
+  return d.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+}
+
+function formatDate(dateStr: string, opts: Intl.DateTimeFormatOptions): string {
+  const d = new Date(dateStr + 'T12:00:00.000Z');
+  return d.toLocaleDateString('en-AU', opts);
+}
+
 async function getCombinedForecast(dates: string[], supabase: any) {
   const products: Record<string, any> = {};
-  let totalOrders = 0;
+  let totalOrders    = 0;
   let totalConfirmed = 0;
   let totalProjected = 0;
 
   for (const date of dates) {
-    // ── Orders for this date ─────────────────────────────────────────────────
     const { data: orders } = await supabase
       .from('orders')
       .select(`
@@ -35,10 +49,7 @@ async function getCombinedForecast(dates: string[], supabase: any) {
       .eq('delivery_date', date)
       .in('status', ['pending', 'confirmed', 'in_production']);
 
-    // ── Fix: use AEST date string directly — no Date() parsing ───────────────
-    const dayOfWeek = new Date(date + 'T12:00:00+10:00')
-      .toLocaleDateString('en-US', { weekday: 'long' })
-      .toLowerCase();
+    const dayOfWeek = getDayOfWeek(date);
 
     const { data: standingOrders } = await supabase
       .from('standing_orders')
@@ -69,7 +80,12 @@ async function getCombinedForecast(dates: string[], supabase: any) {
                 unit:         item.product?.unit || 'unit',
                 category:     item.product?.category || '',
                 quantity:     0,
-                sources: { manual: 0, standing_order_confirmed: 0, standing_order_projected: 0, online: 0 },
+                sources: {
+                  manual:                   0,
+                  standing_order_confirmed: 0,
+                  standing_order_projected: 0,
+                  online:                   0,
+                },
               };
             }
             products[key].quantity += item.quantity;
@@ -99,7 +115,12 @@ async function getCombinedForecast(dates: string[], supabase: any) {
                   unit:         item.product?.unit || 'unit',
                   category:     item.product?.category || '',
                   quantity:     0,
-                  sources: { manual: 0, standing_order_confirmed: 0, standing_order_projected: 0, online: 0 },
+                  sources: {
+                    manual:                   0,
+                    standing_order_confirmed: 0,
+                    standing_order_projected: 0,
+                    online:                   0,
+                  },
                 };
               }
               products[key].quantity += item.quantity;
@@ -119,7 +140,6 @@ async function getCombinedForecast(dates: string[], supabase: any) {
   return { products: productsArray, grandTotal, totalOrders, totalConfirmed, totalProjected };
 }
 
-// ── Main GET handler ───────────────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
   const isAdmin = await checkAdmin();
   if (!isAdmin) return new NextResponse('Unauthorized', { status: 401 });
@@ -127,47 +147,38 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const autoPrint = searchParams.get('autoprint') === '1';
 
-  // ── Parse dates — default to today ────────────────────────────────────────
   const datesParam = searchParams.get('dates');
   const dateParam  = searchParams.get('date');
 
-  // ── Fix: default to TODAY not tomorrow ────────────────────────────────────
-  const todayAEST = new Date(
-    new Date().toLocaleString('en-US', { timeZone: 'Australia/Sydney' })
-  ).toISOString().split('T')[0];
+  const todayBrisbane = getBrisbaneDate();
 
   const dates: string[] = datesParam
     ? datesParam.split(',').map(d => d.trim()).filter(Boolean)
     : dateParam
     ? [dateParam]
-    : [todayAEST];
+    : [todayBrisbane];
 
-  const rangeStart = dates[0] ?? todayAEST;
-  const rangeEnd   = dates[dates.length - 1] ?? todayAEST;
+  const rangeStart = dates[0]                ?? todayBrisbane;
+  const rangeEnd   = dates[dates.length - 1] ?? todayBrisbane;
 
-  // ── Service client ─────────────────────────────────────────────────────────
   const { createClient: createSupabaseClient } = await import('@supabase/supabase-js');
   const supabase = createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // ── Get combined totals ────────────────────────────────────────────────────
   const { products, grandTotal, totalOrders, totalConfirmed, totalProjected }
     = await getCombinedForecast(dates, supabase);
 
-  // ── Page title ────────────────────────────────────────────────────────────
-  const fmt = (d: string) => new Date(d + 'T12:00:00+10:00')
-    .toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
-
   const pageTitle = dates.length === 1
-    ? new Date(dates[0] + 'T12:00:00+10:00').toLocaleDateString('en-AU', {
-        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-      })
-    : `${fmt(dates[0])} to ${fmt(dates[dates.length - 1])}`;
+    ? formatDate(dates[0], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : `${formatDate(dates[0], { weekday: 'short', day: 'numeric', month: 'short' })} to ${
+        formatDate(dates[dates.length - 1], { weekday: 'short', day: 'numeric', month: 'short' })}`;
 
-  const html = `
-<!DOCTYPE html>
+  const printedAt = new Date(new Date().getTime() + 10 * 60 * 60 * 1000)
+    .toISOString().replace('T', ' ').slice(0, 16);
+
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -175,41 +186,40 @@ export async function GET(request: NextRequest) {
   <title>Production Sheet - ${pageTitle}</title>
   <style>
     @media print {
-      @page { margin: 0.5in; }
+      @page { margin: 0.3in; }
       .no-print { display: none !important; }
       body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; font-size: 11pt; padding: 20px; }
+    body { font-family: Arial, sans-serif; font-size: 9pt; padding: 12px; }
 
     .controls {
-      padding: 16px 20px; background: #f5f5f5;
-      margin-bottom: 24px; border-radius: 8px; border: 1px solid #ddd;
+      padding: 12px 16px; background: #f5f5f5;
+      margin-bottom: 16px; border-radius: 6px; border: 1px solid #ddd;
     }
-    .controls h3 { margin-bottom: 12px; font-size: 13pt; color: #333; }
+    .controls h3 { margin-bottom: 10px; font-size: 11pt; }
     .range-row {
       display: flex; align-items: flex-end;
-      gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+      gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
     }
     .range-row label {
       display: flex; flex-direction: column;
-      gap: 4px; font-size: 10pt; font-weight: bold; color: #444;
+      gap: 3px; font-size: 9pt; font-weight: bold; color: #444;
     }
     .range-row input[type="date"] {
-      padding: 7px 10px; border: 1px solid #ccc;
-      border-radius: 5px; font-size: 11pt;
+      padding: 5px 8px; border: 1px solid #ccc;
+      border-radius: 4px; font-size: 10pt;
     }
-    .preset-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .preset-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
     .preset-btn {
-      padding: 5px 10px; font-size: 9pt;
-      border: 1px solid #ccc; border-radius: 4px;
-      background: white; cursor: pointer;
+      padding: 4px 10px; font-size: 9pt; border: 1px solid #ccc;
+      border-radius: 4px; background: white; cursor: pointer;
     }
     .preset-btn:hover { background: #e8f5e9; border-color: #006A4E; }
-    .action-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .action-row { display: flex; gap: 8px; flex-wrap: wrap; }
     .btn {
-      padding: 8px 18px; border: none; border-radius: 5px;
-      cursor: pointer; font-weight: bold; font-size: 11pt;
+      padding: 7px 16px; border: none; border-radius: 4px;
+      cursor: pointer; font-weight: bold; font-size: 10pt;
       text-decoration: none; display: inline-block;
     }
     .btn-view  { background: white; color: #006A4E; border: 2px solid #006A4E; }
@@ -217,41 +227,34 @@ export async function GET(request: NextRequest) {
     .btn-back  { background: #666; color: white; }
 
     .page-header {
-      margin-bottom: 20px; padding-bottom: 14px;
-      border-bottom: 3px solid #006A4E;
+      margin-bottom: 10px; padding-bottom: 6px;
+      border-bottom: 2px solid #006A4E;
     }
-    .page-header h1 { color: #006A4E; font-size: 22pt; margin-bottom: 4px; }
-    .page-header .subtitle { font-size: 15pt; font-weight: bold; margin-bottom: 4px; }
-    .page-header .summary  { font-size: 10pt; color: #444; }
+    .page-header h1 { color: #006A4E; font-size: 16pt; margin-bottom: 2px; }
+    .page-header .subtitle { font-size: 12pt; font-weight: bold; margin-bottom: 2px; }
+    .page-header .summary  { font-size: 8pt; color: #444; }
 
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #333; padding: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+    th, td { border: 1px solid #555; padding: 4px 6px; }
     th {
       background: #006A4E; color: white;
-      font-weight: bold; text-transform: uppercase; font-size: 9pt;
+      font-weight: bold; text-transform: uppercase; font-size: 8pt;
     }
-    tr:nth-child(even) { background: #f9f9f9; }
+    tr:nth-child(even) { background: #f5f5f5; }
     .total-row {
-      background: #e6f4ef !important; font-weight: bold;
-      border-top: 2px solid #333;
+      background: #d4edda !important;
+      font-weight: bold; border-top: 2px solid #333;
     }
-
     .signoff {
-      margin-top: 30px; border-top: 1px solid #ccc;
-      padding-top: 20px; display: flex;
-      justify-content: space-between; gap: 20px;
+      margin-top: 16px; border-top: 1px solid #ccc;
+      padding-top: 12px; display: flex;
+      justify-content: space-between; gap: 20px; font-size: 9pt;
     }
-    .signoff div p { margin-bottom: 36px; }
-
-    .empty {
-      text-align: center; padding: 60px 20px;
-      color: #666; font-size: 14pt;
-    }
+    .signoff div p { margin-bottom: 24px; }
   </style>
 </head>
 <body>
 
-  <!-- Controls (hidden on print) -->
   <div class="controls no-print">
     <h3>Production Sheet</h3>
     <div class="range-row">
@@ -277,74 +280,76 @@ export async function GET(request: NextRequest) {
     </div>
   </div>
 
-  <!-- Printed header -->
   <div class="page-header">
     <h1>Production Sheet</h1>
     <div class="subtitle">${pageTitle}</div>
     <div class="summary">
       Orders: <strong>${totalOrders}</strong>
       (${totalConfirmed} confirmed${totalProjected > 0 ? `, ${totalProjected} projected` : ''})
-      &nbsp;|&nbsp;
-      Total items: <strong>${grandTotal}</strong>
-      &nbsp;|&nbsp;
-      Printed: ${new Date().toLocaleString('en-AU', { timeZone: 'Australia/Sydney' })}
+      &nbsp;|&nbsp; Total items: <strong>${grandTotal}</strong>
+      &nbsp;|&nbsp; Printed: ${printedAt} (Brisbane)
     </div>
   </div>
 
-  <!-- Combined product table -->
   ${products.length === 0 ? `
-    <div class="empty">No orders found for the selected period.</div>
+    <p style="text-align:center; padding:40px; color:#666; font-size:12pt;">
+      No orders found for the selected period.
+    </p>
   ` : `
     <table>
       <thead>
         <tr>
-          <th style="width:70px;">Code</th>
+          <th style="width:60px;">Code</th>
           <th>Product</th>
-          <th style="width:100px; text-align:right;">Total Qty</th>
-          <th style="width:150px;">Source</th>
-          <th style="width:70px; text-align:center;">Done</th>
+          <th style="width:80px; text-align:right;">Qty</th>
+          <th style="width:120px;">Source</th>
+          <th style="width:50px; text-align:center;">Done</th>
         </tr>
       </thead>
       <tbody>
         ${products.map((p: any) => `
           <tr>
-            <td style="font-family:monospace; font-weight:bold;">${p.code}</td>
-            <td>
+            <td style="font-family:monospace; font-weight:bold; font-size:8pt;">
+              ${p.code}
+            </td>
+            <td style="font-size:9pt;">
               <strong>${p.product_name}</strong>
-              ${p.category
-                ? `<br><span style="font-size:9pt;color:#666;">${p.category}</span>`
-                : ''}
             </td>
-            <td style="text-align:right; font-size:16pt; font-weight:bold;">
+            <td style="text-align:right; font-size:13pt; font-weight:bold; white-space:nowrap;">
               ${p.quantity}
-              <span style="font-size:9pt; font-weight:normal;"> ${p.unit}</span>
+              <span style="font-size:8pt; font-weight:normal;"> ${p.unit}</span>
             </td>
-            <td style="font-size:9pt; line-height:1.8;">
+            <td style="font-size:8pt; line-height:1.4;">
               ${p.sources.manual > 0
-                ? `Manual: ${p.sources.manual}<br>` : ''}
+                ? `M:${p.sources.manual} ` : ''}
               ${p.sources.standing_order_confirmed > 0
-                ? `Standing: ${p.sources.standing_order_confirmed}<br>` : ''}
+                ? `S:${p.sources.standing_order_confirmed} ` : ''}
               ${p.sources.standing_order_projected > 0
-                ? `Projected: ${p.sources.standing_order_projected}<br>` : ''}
+                ? `P:${p.sources.standing_order_projected} ` : ''}
               ${p.sources.online > 0
-                ? `Online: ${p.sources.online}` : ''}
+                ? `O:${p.sources.online}` : ''}
             </td>
             <td style="text-align:center;">
-              <input type="checkbox" style="width:18px;height:18px;">
+              <input type="checkbox" style="width:14px;height:14px;">
             </td>
           </tr>
         `).join('')}
         <tr class="total-row">
-          <td colspan="2" style="text-align:right; font-size:12pt;">GRAND TOTAL:</td>
-          <td style="text-align:right; font-size:18pt; font-weight:bold;">${grandTotal}</td>
+          <td colspan="2" style="text-align:right; font-size:10pt; padding:5px 8px;">
+            GRAND TOTAL:
+          </td>
+          <td style="text-align:right; font-size:14pt; font-weight:bold; padding:5px 8px;">
+            ${grandTotal}
+          </td>
           <td colspan="2"></td>
         </tr>
       </tbody>
     </table>
 
-    <div style="margin-top:40px; border-top:1px solid #ccc; padding-top:20px;">
-      <p style="font-weight:bold; margin-bottom:10px;">Production Notes:</p>
-      <div style="border:1px solid #ccc; min-height:80px; padding:10px; background:#f9f9f9;"></div>
+    <div style="margin-top:14px; border-top:1px solid #ccc; padding-top:8px;">
+      <p style="font-weight:bold; margin-bottom:6px; font-size:9pt;">Notes:</p>
+      <div style="border:1px solid #ccc; min-height:50px; padding:8px;
+                  background:#f9f9f9;"></div>
     </div>
   `}
 
@@ -366,36 +371,37 @@ export async function GET(request: NextRequest) {
       });
     ` : ''}
 
+    function getBrisbaneISO(offsetDays) {
+      const now      = new Date();
+      const brisbane = new Date(now.getTime() + 10 * 60 * 60 * 1000);
+      brisbane.setUTCDate(brisbane.getUTCDate() + (offsetDays || 0));
+      return brisbane.toISOString().split('T')[0];
+    }
+
     function getDatesBetween(start, end) {
-      const dates = [];
-      const current = new Date(start + 'T12:00:00');
-      const last    = new Date(end   + 'T12:00:00');
-      if (current > last) return [start];
+      const dates   = [];
+      const current = new Date(start + 'T12:00:00Z');
+      const last    = new Date(end   + 'T12:00:00Z');
       while (current <= last) {
         dates.push(current.toISOString().split('T')[0]);
-        current.setDate(current.getDate() + 1);
+        current.setUTCDate(current.getUTCDate() + 1);
       }
-      return dates;
+      return dates.length ? dates : [start];
     }
 
     function setPreset(startOffset, endOffset) {
-      // ── Use AEST today ─────────────────────────────────────────────────────
-      const now   = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Sydney' }));
-      const s     = new Date(now); s.setDate(s.getDate() + startOffset);
-      const e     = new Date(now); e.setDate(e.getDate() + endOffset);
-      const toISO = d => d.toISOString().split('T')[0];
-      document.getElementById('startDate').value = toISO(s);
-      document.getElementById('endDate').value   = toISO(e);
+      document.getElementById('startDate').value = getBrisbaneISO(startOffset);
+      document.getElementById('endDate').value   = getBrisbaneISO(endOffset);
     }
 
     function loadRange(print) {
       const start = document.getElementById('startDate').value;
       const end   = document.getElementById('endDate').value;
       if (!start || !end) { alert('Please select both dates.'); return; }
-      if (start > end)    { alert('Start must be before end date.'); return; }
+      if (start > end)    { alert('Start must be before end.'); return; }
       const dates = getDatesBetween(start, end);
       if (dates.length > 14) {
-        if (!confirm('You have ' + dates.length + ' days selected. Continue?')) return;
+        if (!confirm(dates.length + ' days selected. Continue?')) return;
       }
       const params = new URLSearchParams({ dates: dates.join(',') });
       if (print) params.set('autoprint', '1');
