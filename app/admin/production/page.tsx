@@ -3,8 +3,8 @@ export const dynamic = 'force-dynamic';
 import { redirect } from "next/navigation";
 import { checkAdmin } from "@/lib/auth";
 import { ArrowLeft, Package } from "lucide-react";
-import Link from "next/link";
 import ProductionForecastView from "./production-forecast-view";
+import ProductionSheetLauncher from "./production-sheet-launcher";   // ← ADD
 
 export default async function ProductionDashboardPage() {
   const isAdmin = await checkAdmin();
@@ -12,7 +12,6 @@ export default async function ProductionDashboardPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Header */}
       <div className="mb-8">
         <a
           href="/admin"
@@ -32,20 +31,12 @@ export default async function ProductionDashboardPage() {
               Plan daily production based on confirmed orders and standing orders
             </p>
           </div>
-          <div className="flex gap-3">
-            <Link
-              href="/admin/production/print"
-              target="_blank"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-white font-semibold hover:opacity-90"
-              style={{ backgroundColor: "#006A4E" }}
-            >
-              🖨️ Print Production Sheet
-            </Link>
-          </div>
+
+          {/* ── Replaces the old Link button ── */}
+          <ProductionSheetLauncher />
         </div>
       </div>
 
-      {/* Forecast View - Client Component */}
       <ProductionForecastView />
     </div>
   );
