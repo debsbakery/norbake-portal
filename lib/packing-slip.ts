@@ -15,10 +15,10 @@ interface PackingSlipData {
     start: number
     end: number
   }
-  invoiceNumber?: string  // Pass in from orders table if available
+  invoiceNumber?: string
 }
 
-// ── Colours — minimal ink palette ────────────────────────────────────────────
+// ── Colours ───────────────────────────────────────────────────────────────────
 
 const C = {
   green:     [0, 106, 78]    as [number, number, number],
@@ -37,10 +37,10 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
 
   const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const margin = 14
-  const PW     = 210  // page width mm
-  const PH     = 297  // page height mm
+  const PW     = 210
+  const PH     = 297
 
-  // ── Build item list ────────────────────────────────────────────────────────
+  // ── Build item list ───────────────────────────────────────────────────────
 
   let items = [...(order.order_items || [])]
 
@@ -57,7 +57,7 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
     return cA - cB
   })
 
-  // ── Dates ──────────────────────────────────────────────────────────────────
+  // ── Dates ─────────────────────────────────────────────────────────────────
 
   const deliveryDateLong = order.delivery_date
     ? new Date(order.delivery_date + 'T00:00:00').toLocaleDateString('en-AU', {
@@ -71,74 +71,57 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
       })
     : '—'
 
-  // ── Draw header (repeated on each page via didDrawPage) ────────────────────
+  // ── Header dimensions ─────────────────────────────────────────────────────
 
-  const HEADER_H   = 28   // header block height
-  const CUSTOMER_H = 22   // customer info block height
+  const HEADER_H     = 28
+  const CUSTOMER_H   = 22
   const HEADER_TOTAL = HEADER_H + CUSTOMER_H + 4
 
-  const drawPageHeader = (pageNum: number, totalPages: number) => {
-    // White background for entire header area
+  // ── Draw page header ──────────────────────────────────────────────────────
+
+  const drawPageHeader = () => {
     doc.setFillColor(...C.white)
     doc.rect(0, 0, PW, HEADER_TOTAL + 2, 'F')
 
-    // ── Thin top border line (green, 1mm) ──
     doc.setFillColor(...C.green)
     doc.rect(0, 0, PW, 2, 'F')
 
-    // ── Bakery name left ──
     doc.setTextColor(...C.green)
     doc.setFontSize(18)
     doc.setFont('helvetica', 'bold')
     doc.text(bakeryInfo.name, margin, 13)
 
-    // ── Bakery contact right ──
     doc.setTextColor(...C.midGray)
     doc.setFontSize(7)
     doc.setFont('helvetica', 'normal')
     doc.text(bakeryInfo.phone, PW - margin, 9, { align: 'right' })
     doc.text(bakeryInfo.address, PW - margin, 14, { align: 'right' })
 
-    // ── "PACKING SLIP" label ──
     doc.setTextColor(...C.darkGray)
     doc.setFontSize(11)
     doc.setFont('helvetica', 'bold')
     doc.text('PACKING SLIP', PW - margin, 22, { align: 'right' })
 
-    // Page number if multi-page
-    if (totalPages > 1) {
-      doc.setFontSize(7)
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(...C.midGray)
-      doc.text(`Page ${pageNum} of ${totalPages}`, PW - margin, 26, { align: 'right' })
-    }
-
-    // ── Thin divider line ──
     doc.setDrawColor(...C.lightGray)
     doc.setLineWidth(0.3)
     doc.line(margin, HEADER_H, PW - margin, HEADER_H)
 
-    // ── Customer info block (light border, no fill) ──
     const cy = HEADER_H + 2
-
     doc.setDrawColor(...C.lightGray)
     doc.setLineWidth(0.3)
     doc.roundedRect(margin, cy, PW - margin * 2, CUSTOMER_H, 1.5, 1.5, 'S')
 
-    // DELIVER TO label
     doc.setTextColor(...C.green)
     doc.setFontSize(7)
     doc.setFont('helvetica', 'bold')
     doc.text('DELIVER TO', margin + 3, cy + 6)
 
-    // Customer name — bold, prominent
     const customerName = order.customer_business_name || order.customer_email || 'Customer'
     doc.setTextColor(...C.black)
     doc.setFontSize(13)
     doc.setFont('helvetica', 'bold')
     doc.text(customerName, margin + 3, cy + 15)
 
-    // Customer address below if available
     const customerAddress = (order as any).customer_address
     if (customerAddress) {
       doc.setFontSize(7)
@@ -147,7 +130,6 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
       doc.text(customerAddress, margin + 3, cy + 20)
     }
 
-    // Delivery date — right side
     doc.setTextColor(...C.red)
     doc.setFontSize(7)
     doc.setFont('helvetica', 'bold')
@@ -158,43 +140,30 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
     doc.setFont('helvetica', 'bold')
     doc.text(deliveryDateShort, PW - margin - 3, cy + 14, { align: 'right' })
 
-    doc.setFontSize(7)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(...C.midGray)
-    // Weekday on second line
     const weekday = order.delivery_date
       ? new Date(order.delivery_date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'long' })
       : ''
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...C.midGray)
     doc.text(weekday, PW - margin - 3, cy + 19, { align: 'right' })
 
-    // Invoice number if available
     if (invoiceNumber) {
       doc.setFontSize(7)
       doc.setFont('helvetica', 'normal')
       doc.setTextColor(...C.midGray)
       doc.text(`Invoice #${invoiceNumber}`, PW - margin - 3, cy + 24, { align: 'right' })
     }
-
-    // ── Notes strip if present ──────────────────────────────────
-    // (drawn inline in main flow, not in header, so it only appears page 1)
   }
 
-  // ── Calculate if we need multi-page ───────────────────────────────────────
-  // Rough estimate: each row ~8mm, header ~60mm, footer ~35mm
-  const ITEMS_PER_PAGE_FIRST  = Math.floor((PH - HEADER_TOTAL - 70) / 8)
-  const ITEMS_PER_PAGE_AFTER  = Math.floor((PH - HEADER_TOTAL - 20) / 8)
-  const remainingAfterFirst   = Math.max(0, items.length - ITEMS_PER_PAGE_FIRST)
-  const extraPages             = remainingAfterFirst > 0
-    ? Math.ceil(remainingAfterFirst / ITEMS_PER_PAGE_AFTER)
-    : 0
-  const totalPages = 1 + extraPages
+  // ── Draw header on page 1 ─────────────────────────────────────────────────
 
-  // Draw header on page 1
-  drawPageHeader(1, totalPages)
+  drawPageHeader()
 
   let yPos = HEADER_TOTAL + 4
 
-  // ── Notes (page 1 only) ────────────────────────────────────────────────────
+  // ── Notes ─────────────────────────────────────────────────────────────────
+
   if (order.notes) {
     doc.setDrawColor(251, 191, 36)
     doc.setLineWidth(0.4)
@@ -209,7 +178,8 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
     yPos += noteH + 3
   }
 
-  // ── Product code range label ───────────────────────────────────────────────
+  // ── Product code range label ──────────────────────────────────────────────
+
   if (productCodeRange) {
     doc.setTextColor(...C.midGray)
     doc.setFontSize(7)
@@ -221,78 +191,94 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
     yPos += 4
   }
 
-  // ── Items table ────────────────────────────────────────────────────────────
+  // ── Auto-scale font based on item count ───────────────────────────────────
+
+  const itemCount = items.length
+  let bodyFontSize = 9.5
+  let cellPadding  = { top: 3.5, bottom: 3.5, left: 3, right: 3 }
+
+  if (itemCount > 30) {
+    bodyFontSize = 6.5
+    cellPadding  = { top: 1, bottom: 1, left: 2, right: 2 }
+  } else if (itemCount > 25) {
+    bodyFontSize = 7
+    cellPadding  = { top: 1.5, bottom: 1.5, left: 2, right: 2 }
+  } else if (itemCount > 18) {
+    bodyFontSize = 8
+    cellPadding  = { top: 2, bottom: 2, left: 2, right: 2 }
+  } else if (itemCount > 12) {
+    bodyFontSize = 9
+    cellPadding  = { top: 2.5, bottom: 2.5, left: 3, right: 3 }
+  }
+
+  // ── Table data ────────────────────────────────────────────────────────────
 
   const tableData = items.map((item) => [
     (item as any).product_code?.toString() ?? '—',
     item.product_name ?? '—',
     item.quantity.toString(),
-    '',  // picked — checkbox drawn via hook
+    '',
   ])
+
+  // ── Items table ───────────────────────────────────────────────────────────
 
   autoTable(doc, {
     startY: yPos,
-
-    head: [['Code', 'Product', 'Qty', 'Picked']],
-    body: tableData,
-
-    // ── No heavy fills — ink-light theme ──
-    theme: 'plain',
+    head:   [['Code', 'Product', 'Qty', 'Picked']],
+    body:   tableData,
+    theme:  'plain',
 
     headStyles: {
       textColor:   C.black,
       fontStyle:   'bold',
-      fontSize:    9,
-      cellPadding: { top: 3, bottom: 3, left: 3, right: 3 },
+      fontSize:    bodyFontSize - 0.5,
+      cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
       lineWidth:   { bottom: 0.5 },
       lineColor:   C.black,
       fillColor:   C.white,
     },
 
     bodyStyles: {
-      fontSize:    9.5,
+      fontSize:    bodyFontSize,
       textColor:   C.black,
-      cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
+      cellPadding: cellPadding,
       lineWidth:   { bottom: 0.15 },
       lineColor:   [210, 210, 210],
       fillColor:   C.white,
     },
 
-    // Alternate rows with very subtle tint — almost no ink
     alternateRowStyles: {
       fillColor: [248, 248, 248] as [number, number, number],
     },
 
     columnStyles: {
-      0: { cellWidth: 20, halign: 'center', fontStyle: 'bold', fontSize: 9 },
+      0: { cellWidth: 20,  halign: 'center', fontStyle: 'bold', fontSize: bodyFontSize - 0.5 },
       1: { cellWidth: 118 },
-      2: { cellWidth: 18, halign: 'center', fontStyle: 'bold', fontSize: 11 },
-      3: { cellWidth: 18, halign: 'center' },
+      2: { cellWidth: 18,  halign: 'center', fontStyle: 'bold', fontSize: bodyFontSize + 1 },
+      3: { cellWidth: 18,  halign: 'center' },
     },
 
-    margin: { left: margin, right: margin },
+    // ✅ Limit table to available space — never overflow to next page
+    margin:    { left: margin, right: margin },
+    showHead:  'everyPage',
+    pageBreak: 'avoid',
 
-    // Header on every page
-    showHead: 'everyPage',
-
-    // ── Draw checkbox in picked column ──────────────────────────
     didDrawCell: (hook) => {
       if (hook.section === 'body' && hook.column.index === 3) {
         const { x, y, width, height } = hook.cell
-        const size = 5.5
-        const cx = x + width / 2 - size / 2
-        const cy = y + height / 2 - size / 2
+        const size = 5
+        const cx   = x + width  / 2 - size / 2
+        const cy   = y + height / 2 - size / 2
         doc.setDrawColor(...C.black)
         doc.setLineWidth(0.35)
         doc.rect(cx, cy, size, size)
       }
     },
 
-    // ── Repeat header on each new page ──────────────────────────
+    // ✅ Redraw header if table forces a new page (edge case for very large orders)
     didDrawPage: (hook) => {
-      const pageNum = hook.pageNumber
-      if (pageNum > 1) {
-        drawPageHeader(pageNum, totalPages)
+      if (hook.pageNumber > 1) {
+        drawPageHeader()
       }
     },
   })
@@ -300,11 +286,11 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
   const tableEndY = (doc as any).lastAutoTable.finalY as number
 
   // ── Totals bar ────────────────────────────────────────────────────────────
-  // Light border box — no black fill
+
   const totalQty   = items.reduce((sum, item) => sum + item.quantity, 0)
   const totalLines = items.length
+  const totalsY    = tableEndY + 3
 
-  const totalsY = tableEndY + 3
   doc.setDrawColor(...C.black)
   doc.setLineWidth(0.5)
   doc.setFillColor(...C.white)
@@ -319,7 +305,8 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
     { align: 'center' }
   )
 
-  // ── Packed by line ────────────────────────────────────────────────────────
+  // ── Packed by signature line ──────────────────────────────────────────────
+
   const sigY = totalsY + 16
   doc.setDrawColor(...C.midGray)
   doc.setLineWidth(0.25)
@@ -331,6 +318,7 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
   doc.text('Signature / Initial', margin, sigY + 4)
 
   // ── Printed date ──────────────────────────────────────────────────────────
+
   doc.setFontSize(6.5)
   doc.setTextColor(...C.midGray)
   doc.text(
@@ -338,9 +326,9 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
     PW / 2, sigY + 8, { align: 'center' }
   )
 
-  // ── CUSTOMER NAME STRIP AT BOTTOM (last page) ─────────────────────────────
-  // Sits below the page content, sticks out of bread crate
-  // Black border box — no heavy fill, large bold text
+  // ── Customer name strip at bottom ─────────────────────────────────────────
+  // Always at fixed position — sticks out of bread crate
+
   const bottomStripY = PH - 22
 
   doc.setFillColor(...C.white)
@@ -348,26 +336,25 @@ export async function generatePackingSlip(data: PackingSlipData): Promise<jsPDF>
   doc.setLineWidth(0.8)
   doc.rect(margin, bottomStripY, PW - margin * 2, 18, 'FD')
 
-  // Customer name scaled to fit
-  const customerName = (order.customer_business_name || order.customer_email || 'CUSTOMER').toUpperCase()
-  const textWidth    = PW - margin * 2 - 8
+  const customerNameUpper = (
+    order.customer_business_name || order.customer_email || 'CUSTOMER'
+  ).toUpperCase()
 
-  // Auto-scale font to fit the box
-  let fontSize = 26
+  const textWidth = PW - margin * 2 - 8
+  let nameFontSize = 26
   doc.setFont('helvetica', 'bold')
-  while (fontSize > 10) {
-    doc.setFontSize(fontSize)
-    const w = doc.getTextWidth(customerName)
-    if (w <= textWidth) break
-    fontSize -= 1
+
+  while (nameFontSize > 10) {
+    doc.setFontSize(nameFontSize)
+    if (doc.getTextWidth(customerNameUpper) <= textWidth) break
+    nameFontSize -= 1
   }
 
   doc.setTextColor(...C.black)
-  doc.setFontSize(fontSize)
+  doc.setFontSize(nameFontSize)
   doc.setFont('helvetica', 'bold')
-  doc.text(customerName, PW / 2, bottomStripY + 11, { align: 'center' })
+  doc.text(customerNameUpper, PW / 2, bottomStripY + 11, { align: 'center' })
 
-  // Delivery date in small text below name inside strip
   doc.setFontSize(7)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(...C.midGray)
