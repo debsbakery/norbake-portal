@@ -11,19 +11,18 @@ export default async function BatchPackingSlipsPage() {
   const isAdmin = await checkAdmin()
   if (!isAdmin) redirect("/")
 
-  const supabase = createServiceClient()
+  const supabase = await createServiceClient()
 
-  // Get recent pending/confirmed orders
   const { data: recentOrders } = await supabase
     .from('orders')
-    .select('delivery_date, status')
+    .select('delivery_date')
     .in('status', ['pending', 'confirmed'])
     .order('delivery_date', { ascending: true })
     .limit(30)
 
   const uniqueDates = Array.from(
-    new Set(recentOrders?.map(o => o.delivery_date) || [])
-  ).sort()
+    new Set(recentOrders?.map((o: any) => o.delivery_date) || [])
+  ).sort() as string[]
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -46,7 +45,6 @@ export default async function BatchPackingSlipsPage() {
         </p>
       </div>
 
-      <BatchPackingSlipGenerator availableDates={uniqueDates} />
-    </div>
+      <BatchPackingSlipGenerator availableDates={uniqueDates} /></div>
   )
 }
