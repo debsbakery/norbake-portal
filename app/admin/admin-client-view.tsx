@@ -4,7 +4,7 @@ import { useState } from 'react'
 import {
   Clock, Users, BarChart3, Package, RefreshCw, Truck,
   DollarSign, FileText, ShoppingCart, ChefHat, Receipt,
-  Copy, Play, ClipboardList,
+  Copy, Play, ClipboardList, Printer,
 } from 'lucide-react'
 
 import OrdersView from './orders-view'
@@ -39,6 +39,15 @@ export default function AdminClientView() {
     }
   }
 
+  // ── Brisbane date (UTC+10, no DST) ────────────────────────────────────────
+  const todayLabel = (() => {
+    const brisbane = new Date(Date.now() + 10 * 60 * 60 * 1000)
+    const iso = brisbane.toISOString().split('T')[0]
+    return new Date(iso + 'T12:00:00Z').toLocaleDateString('en-AU', {
+      weekday: 'long', day: 'numeric', month: 'long',
+    })
+  })()
+
   return (
     <div className="min-h-screen bg-gray-50">
 
@@ -53,7 +62,7 @@ export default function AdminClientView() {
                 Admin Dashboard
               </h1>
               <p className="text-sm text-gray-500 mt-0.5">
-                Deb's Bakery — wholesale operations
+                {todayLabel} — Deb's Bakery
               </p>
             </div>
 
@@ -70,6 +79,13 @@ export default function AdminClientView() {
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
                 style={{ backgroundColor: '#CE1126' }}>
                 <Receipt className="h-4 w-4" />Direct Invoice
+              </a>
+
+              {/* ✅ NEW — Packing Slips button */}
+              <a href="/admin/batch-packing-slips"
+                className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+                style={{ backgroundColor: '#0369a1' }}>
+                <Printer className="h-4 w-4" />Packing Slips
               </a>
 
               <a href="/admin/production"
@@ -168,27 +184,19 @@ export default function AdminClientView() {
       {/* Tab Content */}
       <div className="container mx-auto px-4 py-6">
 
-        {activeTab === 'orders' && (
-          <OrdersView supabase={null as any} />
-        )}
+        {activeTab === 'orders' && <OrdersView supabase={null as any} />}
 
-        {/* Standing orders — redirect to dedicated server-rendered page */}
         {activeTab === 'standing-orders' && (
           <div className="bg-white rounded-lg shadow-md p-8">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-2xl font-bold">Standing Orders</h2>
-                <p className="text-gray-500 mt-1">
-                  Manage recurring weekly orders for all customers
-                </p>
+                <p className="text-gray-500 mt-1">Manage recurring weekly orders for all customers</p>
               </div>
-              <a
-                href="/admin/standing-orders"
+              <a href="/admin/standing-orders"
                 className="flex items-center gap-2 px-6 py-3 rounded-lg text-white font-semibold hover:opacity-90"
-                style={{ backgroundColor: '#006A4E' }}
-              >
-                <RefreshCw className="h-5 w-5" />
-                Open Standing Orders
+                style={{ backgroundColor: '#006A4E' }}>
+                <RefreshCw className="h-5 w-5" />Open Standing Orders
               </a>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -206,13 +214,10 @@ export default function AdminClientView() {
               </div>
             </div>
             <div className="text-center">
-              <a
-                href="/admin/standing-orders"
+              <a href="/admin/standing-orders"
                 className="inline-flex items-center gap-2 px-8 py-4 rounded-lg text-white font-semibold hover:opacity-90 text-lg"
-                style={{ backgroundColor: '#006A4E' }}
-              >
-                <RefreshCw className="h-6 w-6" />
-                Go to Standing Orders
+                style={{ backgroundColor: '#006A4E' }}>
+                <RefreshCw className="h-6 w-6" />Go to Standing Orders
               </a>
             </div>
           </div>
@@ -222,7 +227,6 @@ export default function AdminClientView() {
         {activeTab === 'pricing'  && <ContractPricingPage />}
 
       </div>
-
     </div>
   )
 }

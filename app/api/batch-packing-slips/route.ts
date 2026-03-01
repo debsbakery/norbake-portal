@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    const { date, orderIds } = await request.json()
+    const { date, orderIds, codeMin = 0, codeMax = 99999 } = await request.json()
 
     let query = supabase
       .from('orders')
@@ -35,40 +35,65 @@ export async function POST(request: NextRequest) {
     } else if (orderIds && orderIds.length > 0) {
       query = query.in('id', orderIds)
     } else {
-      return NextResponse.json({ error: 'Either date or orderIds required' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'Either date or orderIds required' },
+        { status: 400 }
+      )
     }
 
     const { data: orders, error } = await query
-
     if (error) throw error
 
     if (!orders || orders.length === 0) {
-      return NextResponse.json({ error: 'No orders found for this date' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'No orders found for this date' },
+        { status: 404 }
+      )
     }
 
-    // Map to match the interface expected by generateBatchPackingSlips
-    const mapped = orders.map((o: any) => ({
-      id:o.id,
-      delivery_date: o.delivery_date,
-      customer: {
-        business_name: o.customer?.business_name || o.customer_business_name || 'Unknown',
-        contact_name:  o.customer?.contact_name  || o.customer_contact_name  || '',
-      },
-      order_items: (o.order_items || []).map((item: any) => ({
-        quantity: item.quantity,
-        product: {
-          name:         item.product?.name || item.product_name || '—',
-          product_code: item.product?.code || '',
-        },
-      })),
-    }))
+    // ── Map orders and filter items by product code range ─────────────────────
+    const mapped = orders
+      .map((o: any) => {
+        // Filter items to only those within the code range
+        const filteredItems = (o.order_items || []).filter((item: any) => {
+          const code = Number(item.product?.code ?? 0)
+          return code >= codeMin && code <= codeMax
+        })
+
+        return {
+          id:            o.id,
+          delivery_date: o.delivery_date,
+          customer: {
+            business_name: o.customer?.business_name || o.customer_business_name || 'Unknown',
+            contact_name:  o.customer?.contact_name  || o.customer_contact_name  || '',
+          },
+          order_items: filteredItems.map((item: any) => ({
+            quantity: item.quantity,
+            product: {
+              name:         item.product?.name || item.product_name || '—',
+              product_code: item.product?.code || '',
+            },
+          })),
+        }
+      })
+      // ── Only include orders that have items in the range ───────────────────
+      .filter((o: any) => o.order_items.length > 0)
+
+    if (mapped.length === 0) {
+      return NextResponse.json(
+        { error: `No orders have products in code range ${codeMin}–${codeMax}` },
+        { status: 404 }
+      )
+    }
 
     const pdfBuffer = await generateBatchPackingSlips(mapped)
+
+    const rangeStr = codeMax === 99999 ? `${codeMin}+` : `${codeMin}-${codeMax}`
 
     return new Response(new Uint8Array(pdfBuffer), {
       headers: {
         'Content-Type':        'application/pdf',
-        'Content-Disposition': `attachment; filename="packing-slips-${date || 'batch'}.pdf"`,
+        'Content-Disposition': `attachment; filename="packing-slips-${date || 'batch'}-codes-${rangeStr}.pdf"`,
       },
     })
 
