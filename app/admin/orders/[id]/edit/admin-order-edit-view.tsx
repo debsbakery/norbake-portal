@@ -17,10 +17,9 @@ export default function AdminOrderEditView({ order, products }: any) {
   const [docketNumber,        setDocketNumber]        = useState(order.docket_number || '')
   const [contractPrices,      setContractPrices]      = useState<Record<string, number>>({})
 
-  // Prevent hydration mismatch
   useEffect(() => { setMounted(true) }, [])
 
-  // Load contract pricing
+  // ── Load contract pricing ──────────────────────────────────────────────────
   useEffect(() => {
     if (!order.customer_id) return
     fetch(`/api/customers/${order.customer_id}/pricing`)
@@ -31,6 +30,17 @@ export default function AdminOrderEditView({ order, products }: any) {
         setContractPrices(map)
       }).catch(() => setContractPrices({}))
   }, [order.customer_id])
+
+  // ── Resolve product_id consistently across DB and new items ───────────────
+  function resolveProductId(item: any): string {
+    return item.product_id ?? item.products?.id ?? item.product?.id ?? ''
+  }
+
+  // ── Resolve price — unit_price may be 0 in DB, fall back to products.price ─
+  function resolveItemPrice(item: any): number {
+    if (item.unit_price > 0) return Number(item.unit_price)
+    return Number(item.products?.price ?? item.product?.price ?? 0)
+  }
 
   function priceForProduct(productId: string): number {
     if (contractPrices[productId] !== undefined) return contractPrices[productId]
@@ -44,17 +54,21 @@ export default function AdminOrderEditView({ order, products }: any) {
     badge:    String(p.code ?? ''),
     sublabel: `$${(contractPrices[p.id] ?? p.price ?? 0).toFixed(2)}${
       contractPrices[p.id] !== undefined ? ' (contract)' : ''
-    }`,}))
+    }`,
+  }))
 
+  // ── Totals using resolved price ────────────────────────────────────────────
   function calculateTotals() {
-    const subtotal = items.reduce(
-      (sum: number, item: any) => sum + item.quantity * item.unit_price, 0
-    )
-    const gst = items.reduce(
-      (sum: number, item: any) =>
-        sum + (item.gst_applicable ? item.quantity * item.unit_price * 0.1 : 0),
-      0
-    )
+    const subtotal = items.reduce((sum: number, item: any) => {
+      return sum + item.quantity * resolveItemPrice(item)
+    }, 0)
+
+    const gst = items.reduce((sum: number, item: any) => {
+      return sum + (item.gst_applicable
+        ? item.quantity * resolveItemPrice(item) * 0.1
+        : 0)
+    }, 0)
+
     return { subtotal, gst, total: subtotal + gst }
   }
 
@@ -76,8 +90,9 @@ export default function AdminOrderEditView({ order, products }: any) {
     const qty   = Math.max(1, selectedQty)
     const price = priceForProduct(selectedProductId)
 
+    // ✅ Use resolveProductId for consistent matching
     const existing = items.find(
-      (i: any) => (i.products?.id || i.product?.id || i.product_id) === selectedProductId
+      (i: any) => resolveProductId(i) === selectedProductId
     )
 
     if (existing) {
@@ -86,12 +101,12 @@ export default function AdminOrderEditView({ order, products }: any) {
       setItems((prev) => [
         ...prev,
         {
-          id:            `new-${Date.now()}`,
-          product_id:    product.id,
-          product_name:  product.name,
-          products:      product,
-          quantity:      qty,
-          unit_price:    price,
+          id:             `new-${Date.now()}`,
+          product_id:     product.id,
+          product_name:   product.name,
+          products:       product,
+          quantity:       qty,
+          unit_price:     price,
           gst_applicable: product.gst_applicable ?? false,
         },
       ])
@@ -116,10 +131,10 @@ export default function AdminOrderEditView({ order, products }: any) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: items.map((item: any) => ({
-            product_id:    item.products?.id || item.product?.id || item.product_id,
-            product_name:  item.products?.name || item.product?.name || item.product_name,
-            quantity:      item.quantity,
-            unit_price:    item.unit_price,
+            product_id:     resolveProductId(item),
+            product_name:   item.products?.name ?? item.product?.name ?? item.product_name,
+            quantity:       item.quantity,
+            unit_price:     resolveItemPrice(item),   // ✅ never sends 0
             gst_applicable: item.gst_applicable,
           })),
           total_amount:          total,
@@ -142,7 +157,6 @@ export default function AdminOrderEditView({ order, products }: any) {
     }
   }
 
-  // Show loading skeleton until client is mounted
   if (!mounted) {
     return (
       <div className="max-w-5xl mx-auto p-6">
@@ -157,19 +171,19 @@ export default function AdminOrderEditView({ order, products }: any) {
 
   const { subtotal, gst, total } = calculateTotals()
 
-  // Build display strings only on client (prevents hydration mismatch)
   const orderTitle = order.invoice_number
     ? `Edit Order #${String(order.invoice_number).padStart(6, '0')}`
     : `Edit Order #${order.id.slice(0, 8).toUpperCase()}`
 
   const deliveryDisplay = order.delivery_date
     ? new Date(order.delivery_date + 'T00:00:00').toLocaleDateString('en-AU', {
-        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
       })
     : ''
 
   return (
-    <div className="max-w-5xl mx-auto p-6"><button
+    <div className="max-w-5xl mx-auto p-6">
+      <button
         onClick={() => router.push('/admin')}
         className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
       >
@@ -189,10 +203,9 @@ export default function AdminOrderEditView({ order, products }: any) {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-
         <div className="lg:col-span-2 space-y-6">
 
-          {/* PO / Docket */}
+          {/* ── PO / Docket ── */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold mb-4">Order References</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -205,7 +218,8 @@ export default function AdminOrderEditView({ order, products }: any) {
                   placeholder="e.g. PO-2024-1234"
                   value={purchaseOrderNumber}
                   onChange={(e) => setPurchaseOrderNumber(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm
+                             focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
               <div>
@@ -217,13 +231,14 @@ export default function AdminOrderEditView({ order, products }: any) {
                   placeholder="e.g. DOC-5678"
                   value={docketNumber}
                   onChange={(e) => setDocketNumber(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm
+                             focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
             </div>
           </div>
 
-          {/* Current items */}
+          {/* ── Current items ── */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold mb-4">
               Order Items
@@ -233,28 +248,35 @@ export default function AdminOrderEditView({ order, products }: any) {
             </h2>
 
             {items.length === 0 ? (
-              <p className="text-center py-8 text-gray-400">No items — add products below</p>
+              <p className="text-center py-8 text-gray-400">
+                No items — add products below
+              </p>
             ) : (
               <div className="space-y-2">
                 {items.map((item: any) => {
-                  const productCode = item.products?.code ?? item.product?.code ?? ''
-                  const productName = item.products?.name ?? item.product?.name ?? item.product_name ?? ''
-                  const isContract  = contractPrices[item.product_id] !== undefined
+                  // ✅ Resolve all fields consistently
+                  const resolvedId   = resolveProductId(item)
+                  const productCode  = item.products?.code ?? item.product?.code ?? ''
+                  const productName  = item.products?.name ?? item.product?.name ?? item.product_name ?? ''
+                  const unitPrice    = resolveItemPrice(item)
+                  const isContract   = contractPrices[resolvedId] !== undefined
 
                   return (
                     <div
                       key={item.id}
-                      className="flex items-center gap-3 p-3 border rounded-lg hover:border-gray-300 transition-colors"
+                      className="flex items-center gap-3 p-3 border rounded-lg
+                                 hover:border-gray-300 transition-colors"
                     >
-                      <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 shrink-0 min-w-[3rem] text-center">
+                      <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded
+                                       text-gray-500 shrink-0 min-w-[3rem] text-center">
                         {productCode || '—'}
                       </span>
 
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{productName}</p>
                         <p className="text-xs text-gray-400">
-                          ${Number(item.unit_price).toFixed(2)} each
-                {item.gst_applicable && (
+                          ${unitPrice.toFixed(2)} each
+                          {item.gst_applicable && (
                             <span className="ml-1 text-green-600">+ GST</span>
                           )}
                           {isContract && (
@@ -266,7 +288,8 @@ export default function AdminOrderEditView({ order, products }: any) {
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 rounded flex items-center justify-center"
+                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 rounded
+                                     flex items-center justify-center"
                         >
                           <Minus className="h-3 w-3" />
                         </button>
@@ -274,19 +297,23 @@ export default function AdminOrderEditView({ order, products }: any) {
                           type="number"
                           min={1}
                           value={item.quantity}
-                          onChange={(e) => updateQuantity(item.id, parseInt(e.target.value) || 0)}
-                          className="w-12 text-center border rounded text-sm font-semibold py-0.5"
+                          onChange={(e) =>
+                            updateQuantity(item.id, parseInt(e.target.value) || 0)
+                          }
+                          className="w-12 text-center border rounded text-sm
+                                     font-semibold py-0.5"
                         />
                         <button
                           onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 rounded flex items-center justify-center"
+                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 rounded
+                                     flex items-center justify-center"
                         >
                           <Plus className="h-3 w-3" />
                         </button>
                       </div>
 
                       <div className="w-20 text-right text-sm font-semibold shrink-0">
-                        ${(item.quantity * Number(item.unit_price)).toFixed(2)}
+                        ${(item.quantity * unitPrice).toFixed(2)}
                       </div>
 
                       <button
@@ -302,7 +329,7 @@ export default function AdminOrderEditView({ order, products }: any) {
             )}
           </div>
 
-          {/* Add product */}
+          {/* ── Add product ── */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold mb-4">Add Product</h2>
 
@@ -324,8 +351,12 @@ export default function AdminOrderEditView({ order, products }: any) {
                   type="number"
                   min={1}
                   value={selectedQty}
-                  onChange={(e) => setSelectedQty(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-green-500"
+                  onChange={(e) =>
+                    setSelectedQty(Math.max(1, parseInt(e.target.value) || 1))
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm
+                             text-center font-semibold focus:outline-none
+                             focus:ring-2 focus:ring-green-500"
                 />
               </div>
 
@@ -334,7 +365,8 @@ export default function AdminOrderEditView({ order, products }: any) {
                 disabled={!selectedProductId}
                 className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium
                            hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400
-                           disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                           disabled:cursor-not-allowed transition-colors
+                           flex items-center gap-2"
               >
                 <Plus className="h-4 w-4" /> Add
               </button>
@@ -349,7 +381,8 @@ export default function AdminOrderEditView({ order, products }: any) {
                   <span className="font-medium text-green-800">{p.name}</span>
                   <span className="text-green-600 ml-2">${price.toFixed(2)} each</span>
                   {contractPrices[p.id] !== undefined && (
-                    <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">
+                    <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5
+                                     rounded font-medium">
                       Contract price
                     </span>
                   )}
@@ -362,7 +395,7 @@ export default function AdminOrderEditView({ order, products }: any) {
           </div>
         </div>
 
-        {/* Right column */}
+        {/* ── Right column — summary ── */}
         <div>
           <div className="bg-white rounded-lg shadow p-6 sticky top-6">
             <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
@@ -386,9 +419,10 @@ export default function AdminOrderEditView({ order, products }: any) {
               <button
                 onClick={saveChanges}
                 disabled={saving || items.length === 0}
-                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg
-                           font-semibold disabled:bg-gray-200 disabled:text-gray-400
-                           disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white
+                           rounded-lg font-semibold disabled:bg-gray-200
+                           disabled:text-gray-400 disabled:cursor-not-allowed
+                           transition-colors flex items-center justify-center gap-2"
               >
                 <Save className="h-4 w-4" />
                 {saving ? 'Saving...' : 'Save Changes'}
@@ -396,22 +430,29 @@ export default function AdminOrderEditView({ order, products }: any) {
 
               <button
                 onClick={() => router.push('/admin')}
-                className="w-full py-2 border border-gray-300 rounded-lg text-sm text-gray-600
-                           hover:bg-gray-50 transition-colors"
+                className="w-full py-2 border border-gray-300 rounded-lg text-sm
+                           text-gray-600 hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
             </div>
 
             <div className="mt-4 pt-4 border-t text-xs text-gray-400 space-y-1">
-              <p>Status: <span className="font-medium text-gray-600">{order.status}</span></p>
+              <p>
+                Status:{' '}
+                <span className="font-medium text-gray-600">{order.status}</span>
+              </p>
               {order.invoice_number && (
-                <p>Invoice #: <span className="font-medium">{String(order.invoice_number).padStart(6, '0')}</span></p>
+                <p>
+                  Invoice #:{' '}
+                  <span className="font-medium">
+                    {String(order.invoice_number).padStart(6, '0')}
+                  </span>
+                </p>
               )}
             </div>
           </div>
         </div>
-
       </div>
     </div>
   )
