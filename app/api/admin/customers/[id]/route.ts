@@ -23,7 +23,7 @@ export async function PUT(
       .update({
         business_name:  business_name.trim(),
         contact_name:   contact_name.trim(),
-        email:          email?.trim().toLowerCase() || undefined,  // ✅ add this
+        email:          email?.trim().toLowerCase() || undefined,
         phone:          phone?.trim()          || null,
         address:        address?.trim()        || null,
         abn:            abn?.trim()            || null,
@@ -37,6 +37,54 @@ export async function PUT(
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     return NextResponse.json({ success: true })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}
+
+// ── DELETE — remove customer if they have no orders ───────────────────────────
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const customerId = params.id
+
+    // ── Safety check — block if customer has orders ────────────────────────
+    const { count: orderCount, error: countError } = await supabaseAdmin
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('customer_id', customerId)
+
+    if (countError) {
+      return NextResponse.json({ error: 'Failed to check orders' }, { status: 500 })
+    }
+
+    if (orderCount && orderCount > 0) {
+      return NextResponse.json(
+        { error: `Cannot delete — customer has ${orderCount} order${orderCount !== 1 ? 's' : ''}` },
+        { status: 400 }
+      )
+    }
+
+    // ── Clean up contract pricing first ───────────────────────────────────
+    await supabaseAdmin
+      .from('customer_pricing')
+      .delete()
+      .eq('customer_id', customerId)
+
+    // ── Delete customer ────────────────────────────────────────────────────
+    const { error: deleteError } = await supabaseAdmin
+      .from('customers')
+      .delete()
+      .eq('id', customerId)
+
+    if (deleteError) {
+      return NextResponse.json({ error: deleteError.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
+
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

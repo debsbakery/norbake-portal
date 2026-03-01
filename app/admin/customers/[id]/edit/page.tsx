@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import CustomerForm from '../../components/customer-form'
+import DeleteCustomerButton from '../../components/delete-customer-button'
 
 interface Props { params: { id: string } }
 
@@ -22,6 +23,12 @@ export default async function EditCustomerPage({ params }: Props) {
 
   if (error || !customer) redirect('/admin/customers')
 
+  // ── Count orders for this customer ────────────────────────────────────────
+  const { count: orderCount } = await supabase
+    .from('orders')
+    .select('*', { count: 'exact', head: true })
+    .eq('customer_id', params.id)
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
       <Link
@@ -32,7 +39,18 @@ export default async function EditCustomerPage({ params }: Props) {
         <ArrowLeft className="h-4 w-4" />
         Back to Customers
       </Link>
-      <h1 className="text-3xl font-bold mb-8">Edit Customer</h1>
+
+      <div className="flex items-start justify-between mb-8">
+        <h1 className="text-3xl font-bold">Edit Customer</h1>
+
+        {/* ── Delete button ── */}
+        <DeleteCustomerButton
+          customerId={params.id}
+          customerName={customer.business_name || customer.email}
+          orderCount={orderCount || 0}
+        />
+      </div>
+
       <CustomerForm customer={customer} isEditing />
     </div>
   )
