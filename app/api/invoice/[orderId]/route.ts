@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { generateInvoice } from '@/lib/invoice'
-
+import { generateInvoice } from '@/lib/invoice-pdf'
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ orderId: string }> }
