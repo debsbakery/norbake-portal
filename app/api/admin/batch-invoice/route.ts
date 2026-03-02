@@ -206,7 +206,6 @@ function buildInvoiceEmail(params: {
   <table style="width:100%;">
     <tr>
       <td style="width:50%;vertical-align:top;">
-        <p style="margin:5px 0;"><strong>Bill To:</strong></p>
         <p style="margin:5px 0;font-size:15px;font-weight:bold;">${customer.business_name ?? 'N/A'}</p>
         ${customer.contact_name ? `<p style="margin:5px 0;">Attn: ${customer.contact_name}</p>` : ''}
         ${customer.address      ? `<p style="margin:5px 0;">${customer.address}</p>`            : ''}
@@ -225,8 +224,8 @@ function buildInvoiceEmail(params: {
     </tr>
   </table>
 </div>
-
-${order.notes ? `
+// TO:
+${order.notes && !order.notes.toLowerCase().includes('auto-generated') ? `
 <div class="card" style="background:#fffbeb;border-left:4px solid #f59e0b;">
   <p style="margin:0;font-weight:bold;color:#92400e;">Order Notes:</p>
   <p style="margin:10px 0 0 0;">${order.notes}</p>
@@ -269,7 +268,7 @@ ${order.notes ? `
     <p style="margin:5px 0;"><strong>Reference:</strong> ${invoiceNumber}</p>
   </div>
   <ul style="line-height:2;margin:5px 0;">
-    <li>Cash or Cheque at delivery</li>
+    <li>Cash at delivery</li>
     <li>In person at ${bakery.address}</li>
   </ul>
   <p style="padding:15px;background:white;border-radius:5px;border-left:4px solid #16a34a;margin-top:15px;">
