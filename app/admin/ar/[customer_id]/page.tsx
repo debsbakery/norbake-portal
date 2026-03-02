@@ -41,11 +41,12 @@ async function getCustomerLedger(customerId: string, startDate?: string, endDate
     { data: payments },
     { data: creditMemos },
   ] = await Promise.all([
-    supabase.from('orders').select('*')
-      .eq('customer_id', customerId)
-      .gte('delivery_date', start)
-      .lte('delivery_date', end)
-      .order('delivery_date', { ascending: false }),
+  supabase.from('orders').select('*')
+  .eq('customer_id', customerId)
+  .eq('status', 'invoiced')              // ← ADD THIS
+  .gte('delivery_date', start)
+  .lte('delivery_date', end)
+  .order('delivery_date', { ascending: false }),
     supabase.from('payments').select('*')
       .eq('customer_id', customerId)
       .gte('payment_date', start)
@@ -58,21 +59,31 @@ async function getCustomerLedger(customerId: string, startDate?: string, endDate
       .order('credit_date', { ascending: false }),
   ])
 
-  // All-time totals for summary cards
-  const [
-    { data: allInvoices },
-    { data: allPayments },
-    { data: allCredits },
-  ] = await Promise.all([
-    supabase.from('orders').select('total_amount, amount_paid').eq('customer_id', customerId),
-    supabase.from('payments').select('amount').eq('customer_id', customerId),
-    supabase.from('credit_memos').select('total_amount, amount').eq('customer_id', customerId),
-  ])
+ // ── All-time totals — FROM AR TRANSACTIONS ONLY ───────────────────────────
+const [
+  { data: allArInvoices },
+  { data: allPayments },
+  { data: allCredits },
+] = await Promise.all([
+  supabase
+    .from('ar_transactions')
+    .select('amount, amount_paid')
+    .eq('customer_id', customerId)
+    .eq('type', 'invoice'),
+  supabase
+    .from('payments')
+    .select('amount')
+    .eq('customer_id', customerId),
+  supabase
+    .from('credit_memos')
+    .select('total_amount, amount')
+    .eq('customer_id', customerId),
+])
 
-  const calculatedBalance =
-    (allInvoices || []).reduce((s, i) => s + parseFloat(i.total_amount || '0'), 0) -
-    (allPayments || []).reduce((s, p) => s + parseFloat(p.amount || '0'), 0) -
-    (allCredits  || []).reduce((s, c) => s + Math.abs(parseFloat(c.total_amount || c.amount || '0')), 0)
+const calculatedBalance =
+  (allArInvoices || []).reduce((s, i) => s + parseFloat(i.amount       || '0'), 0) -
+  (allPayments   || []).reduce((s, p) => s + parseFloat(p.amount       || '0'), 0) -
+  (allCredits    || []).reduce((s, c) => s + Math.abs(parseFloat(c.total_amount || c.amount || '0')), 0)
 
   return {
     customer,
