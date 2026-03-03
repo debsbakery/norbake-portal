@@ -475,11 +475,11 @@ export default function DirectInvoicePage() {
 
       if (arError) throw new Error(`AR transaction failed: ${arError.message}`)
 
-      await supabase
-        .from('customers')
-        .update({ balance: (customer.balance || 0) + grandTotal })
-        .eq('id', formData.customerId)
-
+           // ✅ Atomic increment — never uses stale React state
+      await supabase.rpc('increment_customer_balance', {
+        p_customer_id: formData.customerId,
+        p_amount:      grandTotal,
+      })
       if (hasCredits) {
         try {
           const creditLines    = lineItems.filter(i => i.isCredit)
