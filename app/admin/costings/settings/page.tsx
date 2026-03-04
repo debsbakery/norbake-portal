@@ -1,8 +1,8 @@
-import { createServiceClient } from '@/lib/supabase/service'
+import { createAdminClient } from '@/lib/supabase/admin'
 import CostSettingsView from './cost-settings-view'
 
 export default async function CostSettingsPage() {
-  const supabase = createServiceClient()
+  const supabase = createAdminClient()
 
   const { data: settings, error } = await supabase
     .from('cost_settings')
@@ -16,7 +16,6 @@ export default async function CostSettingsPage() {
     )
   }
 
-  // Map by setting_key (not key)
   const settingsMap: Record<string, { value: number; is_actual: boolean; notes: string }> = {}
   for (const row of settings ?? []) {
     settingsMap[row.setting_key] = {
