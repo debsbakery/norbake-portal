@@ -1,6 +1,14 @@
-// app/admin/production/print/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from "@/lib/supabase/server";
+
+// ── Category ranges ───────────────────────────────────────────────────────────
+const CATEGORIES = [
+  { label: 'All',               min: 0,    max: 99999 },
+  { label: 'Cakes (1000-1999)', min: 1000, max: 1999  },
+  { label: 'Bread (2000-2750)', min: 2000, max: 2750  },
+  { label: 'Rolls (2751-3750)', min: 2751, max: 3750  },
+  { label: 'Pies (3751-4000)',  min: 3751, max: 4000  },
+]
 
 async function checkAdmin() {
   try {
@@ -149,6 +157,8 @@ export async function GET(request: NextRequest) {
 
   const datesParam = searchParams.get('dates');
   const dateParam  = searchParams.get('date');
+  const minCode    = parseInt(searchParams.get('min') ?? '0',     10);
+  const maxCode    = parseInt(searchParams.get('max') ?? '99999', 10);
 
   const todayBrisbane = getBrisbaneDate();
 
@@ -167,23 +177,48 @@ export async function GET(request: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const { products, grandTotal, totalOrders, totalConfirmed, totalProjected }
+  // Get all products then filter by code range
+  const { products: allProducts, grandTotal: _rawTotal, totalOrders, totalConfirmed, totalProjected }
     = await getCombinedForecast(dates, supabase);
 
+  const products = allProducts.filter((p: any) => {
+    const c = Number(p.code);
+    return c >= minCode && c <= maxCode;
+  });
+  const grandTotal = products.reduce((sum: number, p: any) => sum + p.quantity, 0);
+
+  // ── Page title ────────────────────────────────────────────────────────────
   const pageTitle = dates.length === 1
     ? formatDate(dates[0], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : `${formatDate(dates[0], { weekday: 'short', day: 'numeric', month: 'short' })} to ${
         formatDate(dates[dates.length - 1], { weekday: 'short', day: 'numeric', month: 'short' })}`;
 
+  // ── Active category label for the header ─────────────────────────────────
+  const activeCat = CATEGORIES.find(c => c.min === minCode && c.max === maxCode);
+  const filterLabel = activeCat && activeCat.min !== 0
+    ? activeCat.label
+    : (minCode > 0 || maxCode < 99999)
+      ? `Codes ${minCode} - ${maxCode}`
+      : '';
+
   const printedAt = new Date(new Date().getTime() + 10 * 60 * 60 * 1000)
     .toISOString().replace('T', ' ').slice(0, 16);
+
+  // ── Category button HTML ──────────────────────────────────────────────────
+  const catButtons = CATEGORIES.map(cat => {
+    const isActive = cat.min === minCode && cat.max === maxCode;
+    return `<button
+      class="preset-btn cat-btn${isActive ? ' cat-active' : ''}"
+      onclick="setCategory(${cat.min}, ${cat.max})"
+    >${cat.label}</button>`;
+  }).join('\n        ');
 
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Production Sheet - ${pageTitle}</title>
+  <title>Production Sheet - ${pageTitle}${filterLabel ? ' - ' + filterLabel : ''}</title>
   <style>
     @media print {
       @page { margin: 0.3in; }
@@ -210,12 +245,31 @@ export async function GET(request: NextRequest) {
       padding: 5px 8px; border: 1px solid #ccc;
       border-radius: 4px; font-size: 10pt;
     }
+    .section-label {
+      font-size: 9pt; font-weight: bold; color: #444; margin-bottom: 6px;
+    }
     .preset-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
     .preset-btn {
       padding: 4px 10px; font-size: 9pt; border: 1px solid #ccc;
       border-radius: 4px; background: white; cursor: pointer;
     }
     .preset-btn:hover { background: #e8f5e9; border-color: #006A4E; }
+    .cat-active {
+      background: #006A4E !important; color: white !important;
+      border-color: #006A4E !important;
+    }
+    .custom-range-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .custom-range-row label {
+      font-size: 9pt; font-weight: bold; color: #444;
+    }
+    .custom-range-row input[type="number"] {
+      width: 90px; padding: 4px 8px; border: 1px solid #ccc;
+      border-radius: 4px; font-size: 9pt;
+    }
+    .custom-range-row span { color: #666; font-size: 9pt; }
     .action-row { display: flex; gap: 8px; flex-wrap: wrap; }
     .btn {
       padding: 7px 16px; border: none; border-radius: 4px;
@@ -232,7 +286,12 @@ export async function GET(request: NextRequest) {
     }
     .page-header h1 { color: #006A4E; font-size: 16pt; margin-bottom: 2px; }
     .page-header .subtitle { font-size: 12pt; font-weight: bold; margin-bottom: 2px; }
-    .page-header .summary  { font-size: 8pt; color: #444; }
+    .page-header .filter-badge {
+      display: inline-block; background: #006A4E; color: white;
+      font-size: 8pt; font-weight: bold; padding: 2px 8px;
+      border-radius: 10px; margin-top: 3px;
+    }
+    .page-header .summary { font-size: 8pt; color: #444; margin-top: 4px; }
 
     table { width: 100%; border-collapse: collapse; margin-top: 4px; }
     th, td { border: 1px solid #555; padding: 4px 6px; }
@@ -255,8 +314,11 @@ export async function GET(request: NextRequest) {
 </head>
 <body>
 
+  <!-- ── Controls (hidden on print) ── -->
   <div class="controls no-print">
     <h3>Production Sheet</h3>
+
+    <!-- Date range -->
     <div class="range-row">
       <label>
         Start Date
@@ -267,12 +329,30 @@ export async function GET(request: NextRequest) {
         <input type="date" id="endDate" value="${rangeEnd}">
       </label>
     </div>
+
+    <!-- Date presets -->
     <div class="preset-row">
       <button class="preset-btn" onclick="setPreset(0,0)">Today</button>
       <button class="preset-btn" onclick="setPreset(1,1)">Tomorrow</button>
       <button class="preset-btn" onclick="setPreset(0,1)">Today + Tomorrow</button>
       <button class="preset-btn" onclick="setPreset(1,7)">Next 7 Days</button>
     </div>
+
+    <!-- Category filter -->
+    <p class="section-label">Filter by Category:</p>
+    <div class="preset-row">
+      ${catButtons}
+    </div>
+
+    <!-- Custom code range -->
+    <div class="custom-range-row">
+      <label>Custom range:</label>
+      <input type="number" id="minCode" value="${minCode === 0 ? '' : minCode}" placeholder="Min code" min="0">
+      <span>to</span>
+      <input type="number" id="maxCode" value="${maxCode === 99999 ? '' : maxCode}" placeholder="Max code" min="0">
+    </div>
+
+    <!-- Actions -->
     <div class="action-row">
       <button onclick="loadRange(false)" class="btn btn-view">View</button>
       <button onclick="loadRange(true)"  class="btn btn-print">Print</button>
@@ -280,20 +360,26 @@ export async function GET(request: NextRequest) {
     </div>
   </div>
 
+  <!-- ── Page header ── -->
   <div class="page-header">
     <h1>Production Sheet</h1>
     <div class="subtitle">${pageTitle}</div>
+    ${filterLabel
+      ? `<div><span class="filter-badge">${filterLabel}</span></div>`
+      : ''}
     <div class="summary">
       Orders: <strong>${totalOrders}</strong>
       (${totalConfirmed} confirmed${totalProjected > 0 ? `, ${totalProjected} projected` : ''})
+      &nbsp;|&nbsp; Products shown: <strong>${products.length}</strong>
       &nbsp;|&nbsp; Total items: <strong>${grandTotal}</strong>
       &nbsp;|&nbsp; Printed: ${printedAt} (Brisbane)
     </div>
   </div>
 
+  <!-- ── Table ── -->
   ${products.length === 0 ? `
     <p style="text-align:center; padding:40px; color:#666; font-size:12pt;">
-      No orders found for the selected period.
+      No orders found for the selected period${filterLabel ? ' in ' + filterLabel : ''}.
     </p>
   ` : `
     <table>
@@ -371,6 +457,10 @@ export async function GET(request: NextRequest) {
       });
     ` : ''}
 
+    // Track active min/max (initialised from server-rendered values)
+    var activeMin = ${minCode};
+    var activeMax = ${maxCode};
+
     function getBrisbaneISO(offsetDays) {
       const now      = new Date();
       const brisbane = new Date(now.getTime() + 10 * 60 * 60 * 1000);
@@ -394,23 +484,52 @@ export async function GET(request: NextRequest) {
       document.getElementById('endDate').value   = getBrisbaneISO(endOffset);
     }
 
+    function setCategory(min, max) {
+      activeMin = min;
+      activeMax = max;
+      document.getElementById('minCode').value = (min === 0)     ? '' : min;
+      document.getElementById('maxCode').value = (max === 99999) ? '' : max;
+      // Update button highlights
+      document.querySelectorAll('.cat-btn').forEach(function(btn) {
+        btn.classList.remove('cat-active');
+      });
+      event.target.classList.add('cat-active');
+    }
+
     function loadRange(print) {
-      const start = document.getElementById('startDate').value;
-      const end   = document.getElementById('endDate').value;
+      const start  = document.getElementById('startDate').value;
+      const end    = document.getElementById('endDate').value;
+      const minVal = document.getElementById('minCode').value.trim();
+      const maxVal = document.getElementById('maxCode').value.trim();
+
       if (!start || !end) { alert('Please select both dates.'); return; }
       if (start > end)    { alert('Start must be before end.'); return; }
+
       const dates = getDatesBetween(start, end);
       if (dates.length > 14) {
         if (!confirm(dates.length + ' days selected. Continue?')) return;
       }
+
       const params = new URLSearchParams({ dates: dates.join(',') });
-      if (print) params.set('autoprint', '1');
+      if (minVal) params.set('min', minVal);
+      if (maxVal) params.set('max', maxVal);
+      if (print)  params.set('autoprint', '1');
+
       window.location.href = '/admin/production/print?' + params.toString();
     }
 
     document.getElementById('startDate').addEventListener('change', function() {
       const end = document.getElementById('endDate');
       if (this.value > end.value) end.value = this.value;
+    });
+
+    // Typing a custom range clears the category highlight
+    ['minCode','maxCode'].forEach(function(id) {
+      document.getElementById(id).addEventListener('input', function() {
+        document.querySelectorAll('.cat-btn').forEach(function(btn) {
+          btn.classList.remove('cat-active');
+        });
+      });
     });
 
     document.addEventListener('keydown', function(e) {
