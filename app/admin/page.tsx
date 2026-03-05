@@ -1,31 +1,26 @@
-import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
-import AdminClientView from './admin-client-view';
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { redirect } from 'next/navigation'
+import AdminClientView from './admin-client-view'
 
 export default async function AdminPage() {
-  const supabase = await createClient();
+  const supabase = await createClient()
 
-  // 🔐 Get authenticated user
-  const { data: { user }, error } = await supabase.auth.getUser();
+  // Get authenticated user
+  const { data: { user }, error } = await supabase.auth.getUser()
 
-  // ❌ Not logged in
-  if (error || !user) {
-    redirect('/login');
-  }
+  if (error || !user) redirect('/login')
 
-  // 🔍 Check role
-  const userRole = user.user_metadata?.role;
+  const userRole = user.user_metadata?.role
 
-  console.log('🔍 Admin Page - User:', user.email);
-  console.log('🔍 Admin Page - Role:', userRole);
+  if (userRole !== 'admin') redirect('/portal')
 
-  // ❌ Not admin - redirect to customer portal
-  if (userRole !== 'admin') {
-    console.log('❌ Not admin, redirecting to /portal');
-    redirect('/portal');
-  }
+  // Fetch pending customer count
+  const adminClient = createAdminClient()
+  const { count: pendingCount } = await adminClient
+    .from('customers')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'pending')
 
-  // ✅ Admin authenticated
-  console.log('✅ Admin access granted');
-  return <AdminClientView />;
+  return <AdminClientView pendingCount={pendingCount ?? 0} />
 }

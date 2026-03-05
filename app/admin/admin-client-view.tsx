@@ -13,8 +13,8 @@ import ProductsView from './products-view'
 
 type Tab = 'orders' | 'standing-orders' | 'pricing' | 'products'
 
-export default function AdminClientView() {
-  const [activeTab, setActiveTab] = useState<Tab>('orders')
+export default function AdminClientView({ pendingCount = 0 }: { pendingCount?: number }) {
+const [activeTab, setActiveTab] = useState<Tab>('orders')
   const [testingStandingOrders, setTestingStandingOrders] = useState(false)
 
   async function testStandingOrderGeneration() {
@@ -106,11 +106,17 @@ export default function AdminClientView() {
                 <Users className="h-4 w-4" />Customers
               </a>
 
-              <a href="/admin/customers/pending"
-                className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
-                style={{ backgroundColor: '#ea580c' }}>
-                <Clock className="h-4 w-4" />Pending
-              </a>
+            <a href="/admin/customers/pending"
+  className="relative flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+  style={{ backgroundColor: '#ea580c' }}>
+  <Clock className="h-4 w-4" />
+  Pending
+  {pendingCount > 0 && (
+    <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
+      {pendingCount}
+    </span>
+  )}
+</a>
 
               <a href="/admin/customers/repeat-order-search"
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
