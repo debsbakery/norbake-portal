@@ -106,10 +106,9 @@ export default function RecipeBuilder({
 
     setAdding(false)
 
-    if (res.ok) {
+ if (res.ok) {
   setNewLine({ type: 'ingredient', ingredient_id: '', sub_recipe_id: '', quantity_grams: '' })
-  // router.refresh()  ← doesn't work reliably
-  window.location.reload()  // ← force full reload
+  window.location.reload()  // ← change router.refresh() to this
 } else {
   alert('Failed to add line')
 }
