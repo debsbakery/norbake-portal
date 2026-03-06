@@ -81,10 +81,10 @@ export default async function PendingCustomersPage() {
 
       {/* ── Summary Badges ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-        <SummaryBadge label="Pending Approval" count={pendingCount}      color="orange" />
-        <SummaryBadge label="Never Invited"    count={noPortalCount}     color="red"    />
+        <SummaryBadge label="Pending Approval"  count={pendingCount}      color="orange" />
+        <SummaryBadge label="Never Invited"     count={noPortalCount}     color="red"    />
         <SummaryBadge label="Invited / Waiting" count={notConfirmedCount} color="blue"   />
-        <SummaryBadge label="Portal Active"    count={confirmedCount}    color="green"  />
+        <SummaryBadge label="Portal Active"     count={confirmedCount}    color="green"  />
       </div>
 
       {/* ── Section 1: Pending Approvals ───────────────────────────── */}
@@ -99,7 +99,13 @@ export default async function PendingCustomersPage() {
       ) : (
         <div className="space-y-4 mb-8">
           {pending!.map(c => (
-            <CustomerCard key={c.id} customer={c} showApprove />
+            <CustomerCard
+              key={c.id}
+              customer={c}
+              showApprove
+              showLastLogin={false}
+              isConfirmed={false}
+            />
           ))}
         </div>
       )}
@@ -117,7 +123,13 @@ export default async function PendingCustomersPage() {
       ) : (
         <div className="space-y-3 mb-8">
           {noPortal!.map(c => (
-            <CustomerCard key={c.id} customer={c} showApprove={false} />
+            <CustomerCard
+              key={c.id}
+              customer={c}
+              showApprove={false}
+              showLastLogin={false}
+              isConfirmed={false}
+            />
           ))}
         </div>
       )}
@@ -128,14 +140,20 @@ export default async function PendingCustomersPage() {
         title="Invited — Awaiting Confirmation"
         count={notConfirmedCount}
         badgeColor="blue"
-        subtitle="These customers received an invite but haven't clicked the link yet. Resend if needed."
+        subtitle="These customers received an invite but have not clicked the link yet. Resend if needed."
       />
       {notConfirmedCount === 0 ? (
         <EmptyState message="No outstanding invites" />
       ) : (
         <div className="space-y-3 mb-8">
           {notConfirmed.map(c => (
-            <CustomerCard key={c.id} customer={c} showApprove={false} />
+            <CustomerCard
+              key={c.id}
+              customer={c}
+              showApprove={false}
+              showLastLogin={false}
+              isConfirmed={false}
+            />
           ))}
         </div>
       )}
@@ -157,7 +175,8 @@ export default async function PendingCustomersPage() {
               key={c.id}
               customer={c}
               showApprove={false}
-              showLastLogin
+              showLastLogin={true}
+              isConfirmed={true}
             />
           ))}
         </div>
@@ -170,7 +189,9 @@ export default async function PendingCustomersPage() {
 function SummaryBadge({
   label, count, color,
 }: {
-  label: string; count: number; color: 'orange' | 'red' | 'blue' | 'green'
+  label: string
+  count: number
+  color: 'orange' | 'red' | 'blue' | 'green'
 }) {
   const styles = {
     orange: 'bg-orange-50 border-orange-200 text-orange-700',
@@ -234,14 +255,18 @@ function CustomerCard({
   customer,
   showApprove,
   showLastLogin = false,
+  isConfirmed = false,
 }: {
   customer: any
   showApprove: boolean
   showLastLogin?: boolean
+  isConfirmed?: boolean
 }) {
   return (
     <div className="bg-white rounded-lg border shadow-sm p-5">
       <div className="flex items-start justify-between gap-4">
+
+        {/* Left — customer details */}
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
             <User className="h-5 w-5 text-orange-600" />
@@ -272,6 +297,7 @@ function CustomerCard({
           </div>
         </div>
 
+        {/* Right — action buttons */}
         <div className="flex flex-col gap-2 shrink-0">
           {showApprove && (
             <form action={`/api/admin/customers/${customer.id}/approve`} method="POST">
@@ -289,6 +315,7 @@ function CustomerCard({
             customerId={customer.id}
             customerEmail={customer.email ?? null}
             portalAccess={customer.portal_access ?? false}
+            confirmed={isConfirmed}
           />
 
           {showApprove && (
@@ -302,6 +329,7 @@ function CustomerCard({
             </form>
           )}
         </div>
+
       </div>
     </div>
   )
