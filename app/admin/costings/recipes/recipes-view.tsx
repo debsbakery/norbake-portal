@@ -7,6 +7,7 @@ interface Recipe {
   id: string
   product_id: string | null
   base_ingredient_id: string | null
+  name: string | null
   created_at: string
   products?: {
     id: string
@@ -159,8 +160,10 @@ export default function RecipesView({ recipes: initial }: Props) {
                         )}
                       </div>
                     ) : (
-                      <span className="text-gray-500 italic">Base Recipe</span>
-                    )}
+  <span className="font-medium text-gray-900">
+    {recipe.name || <span className="text-gray-400 italic">Unnamed Base Recipe</span>}
+  </span>
+)}
                   </td>
                   <td className="px-4 py-3">
                     {recipe.products ? (

@@ -16,7 +16,7 @@ export default async function RecipesPage() {
         code
       )
     `)
-    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
 
   if (error) {
     return (
@@ -28,3 +28,4 @@ export default async function RecipesPage() {
 
   return <RecipesView recipes={recipes ?? []} />
 }
+
