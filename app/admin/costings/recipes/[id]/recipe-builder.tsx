@@ -46,6 +46,7 @@ interface Props {
   lines: RecipeLine[]
   allIngredients: Ingredient[]
   allRecipes: any[]
+  subRecipeCosts: Record<string, number>
 }
 
 export default function RecipeBuilder({
@@ -53,6 +54,7 @@ export default function RecipeBuilder({
   lines: initialLines,
   allIngredients,
   allRecipes,
+  subRecipeCosts,
 }: Props) {
   const router = useRouter()
   const [lines, setLines] = useState<RecipeLine[]>(initialLines)
@@ -146,12 +148,14 @@ export default function RecipeBuilder({
   }, 0)
 
   const totalCost = lines.reduce((sum, line) => {
-    if (line.ingredient_id && line.ingredients) {
-      return sum + ((line.quantity_grams || 0) / 1000) * line.ingredients.unit_cost
-    }
-    return sum
-  }, 0)
-
+  if (line.ingredient_id && line.ingredients) {
+    return sum + ((line.quantity_grams || 0) / 1000) * line.ingredients.unit_cost
+  }
+  if (line.sub_recipe_id && subRecipeCosts[line.sub_recipe_id]) {
+    return sum + (line.sub_qty_grams || 0) * subRecipeCosts[line.sub_recipe_id]
+  }
+  return sum
+}, 0)
   const costPerKg = totalWeight > 0 ? totalCost / (totalWeight / 1000) : 0
 
   return (
@@ -263,17 +267,20 @@ export default function RecipeBuilder({
             <tbody className="divide-y divide-gray-100">
               {lines.map((line) => (
                 <tr key={line.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    {line.ingredient_id ? (
-                      <span className="font-medium text-gray-900">
-                        {line.ingredients?.name}
-                      </span>
-                    ) : (
-                      <span className="text-indigo-600 font-medium">
-                        {line.sub_recipes?.products?.name || 'Sub-Recipe'}
-                      </span>
-                    )}
-                  </td>
+                  <td className="px-4 py-3 text-right text-gray-600">
+  {line.ingredient_id && line.ingredients ? (
+    `$${(((line.quantity_grams || 0) / 1000) * line.ingredients.unit_cost).toFixed(2)}`
+  ) : line.sub_recipe_id && subRecipeCosts[line.sub_recipe_id] ? (
+    <span className="text-indigo-600">
+      ${((line.sub_qty_grams || 0) * subRecipeCosts[line.sub_recipe_id]).toFixed(2)}
+      <span className="text-xs text-gray-400 ml-1">
+        (${(subRecipeCosts[line.sub_recipe_id] * 1000).toFixed(3)}/kg)
+      </span>
+    </span>
+  ) : (
+    <span className="text-gray-300">—</span>
+  )}
+</td>
                   <td className="px-4 py-3 text-right font-mono text-gray-700">
                     {(line.quantity_grams || line.sub_qty_grams || 0).toLocaleString()}g
                   </td>
