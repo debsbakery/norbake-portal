@@ -40,7 +40,7 @@ export default async function RecipeBuilderPage({ params }: { params: { id: stri
       )
     `)
     .eq('recipe_id', params.id)
-    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
 
   const { data: allIngredients } = await supabase
     .from('ingredients')
@@ -67,3 +67,4 @@ export default async function RecipeBuilderPage({ params }: { params: { id: stri
     />
   )
 }
+
