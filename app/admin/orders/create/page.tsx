@@ -186,87 +186,79 @@ export default function AdminCreateOrderPage() {
   const grandTotal = subtotal + gstTotal
 
   // ── Submit ────────────────────────────────────────────────────────────────
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-    setSuccess(null)
+ async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault()
+  setLoading(true)
+  setError(null)
+  setSuccess(null)
 
-    try {
-      if (!form.customerId)   throw new Error('Please select a customer')
-      if (!form.deliveryDate) throw new Error('Please select a delivery date')
-      if (!lineItems.length)  throw new Error('Please add at least one product')
-      if (lineItems.some((i) => !i.productId || i.quantity <= 0))
-        throw new Error('All rows need a product and quantity greater than 0')
+  try {
+    if (!form.customerId)   throw new Error('Please select a customer')
+    if (!form.deliveryDate) throw new Error('Please select a delivery date')
+    if (!lineItems.length)  throw new Error('Please add at least one product')
+    if (lineItems.some((i) => !i.productId || i.quantity <= 0))
+      throw new Error('All rows need a product and quantity greater than 0')
 
-      const customer = selectedCustomer!
+    const customer = selectedCustomer!
 
-      const { data: newOrder, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          customer_id:            form.customerId,
-          customer_email:         customer.email,
-          customer_business_name: customer.business_name,
-          customer_address:       customer.address   || null,
-          customer_abn:           customer.abn       || null,
-          delivery_date:          form.deliveryDate,
-          total_amount:           grandTotal,
-          status:                 'pending',
-          source:                 form.source,
-          notes:                  form.notes               || null,
-          purchase_order_number:  form.purchaseOrderNumber || null,
-          docket_number:          form.docketNumber        || null,
-        })
-        .select()
-        .single()
+    // ✅ Call API route instead of direct Supabase
+    const response = await fetch('/api/admin/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer: {
+          id: customer.id,
+          email: customer.email,
+          business_name: customer.business_name,
+          address: customer.address,
+          abn: customer.abn,
+        },
+        deliveryDate: form.deliveryDate,
+        items: lineItems,
+        totals: {
+          subtotal,
+          gstTotal,
+          grandTotal,
+        },
+        metadata: {
+          source: form.source,
+          notes: form.notes,
+          purchaseOrderNumber: form.purchaseOrderNumber,
+          docketNumber: form.docketNumber,
+        },
+      }),
+    })
 
-      if (orderError) throw new Error(`Order failed: ${orderError.message}`)
+    const data = await response.json()
 
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(
-          lineItems.map((item) => ({
-            order_id:      newOrder.id,
-            product_id:    item.productId,
-            product_name:  item.productName,
-            quantity:      item.quantity,
-            unit_price:    item.unitPrice,
-            subtotal:      item.quantity * item.unitPrice,
-            gst_applicable: item.gstApplicable,
-          }))
-        )
-
-      if (itemsError) {
-        await supabase.from('orders').delete().eq('id', newOrder.id)
-        throw new Error(`Items failed: ${itemsError.message}`)
-      }
-
-      setSuccess(
-        `Order created for ${customer.business_name} — delivery ${
-          new Date(form.deliveryDate + 'T00:00:00').toLocaleDateString('en-AU', {
-            weekday: 'long', day: 'numeric', month: 'long',
-          })
-        }. Total: ${fmt(grandTotal)}`
-      )
-
-      setLineItems([])
-      setSelectedCustomer(null)
-      setForm((f) => ({
-        ...f,
-        customerId:          '',
-        purchaseOrderNumber: '',
-        docketNumber:        '',
-        notes:               '',
-        deliveryDate:        '',
-      }))
-
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to create order')
     }
-  }
 
+    setSuccess(
+      `Order created for ${customer.business_name} — delivery ${
+        new Date(form.deliveryDate + 'T00:00:00').toLocaleDateString('en-AU', {
+          weekday: 'long', day: 'numeric', month: 'long',
+        })
+      }. Total: ${fmt(grandTotal)}`
+    )
+
+    setLineItems([])
+    setSelectedCustomer(null)
+    setForm((f) => ({
+      ...f,
+      customerId:          '',
+      purchaseOrderNumber: '',
+      docketNumber:        '',
+      notes:               '',
+      deliveryDate:        '',}))
+
+  } catch (err: any) {
+    setError(err.message)
+  } finally {
+    setLoading(false)
+  }
+}
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50">
