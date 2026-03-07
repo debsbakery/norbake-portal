@@ -57,18 +57,19 @@ export default function WeeklyReportView({ weeks, topProducts, thisWeekStart }: 
 
   const maxRevenue = Math.max(...weeks.map(w => w.revenue))
 
-  // ── Profit estimate ───────────────────────────────────────────
- const wages       = parseFloat(actualWages[current?.week_start] || '0') || 0
-const estIngred   = current.revenue * 0.30  // 30% until recipes done
-const estOverhead = current.revenue * 0.30  // 30% long term avg
-const labourCost  = wagesEntered 
-  ? wages                        // use actual wages
-  : current.revenue * 0.30       // or 30% estimate
-
-const totalCosts  = estIngred + labourCost + estOverhead
-const estProfit   = current.revenue - totalCosts
-const estMargin   = (estProfit / current.revenue) * 100
+  // ── Profit estimate — ALL declared in correct order ───────────
+  const wages        = parseFloat(actualWages[current?.week_start] || '0') || 0
   const wagesEntered = wages > 0
+  const estIngred    = current ? current.revenue * 0.30 : 0
+  const estOverhead  = current ? current.revenue * 0.30 : 0
+  const labourCost   = wagesEntered
+    ? wages
+    : (current ? current.revenue * 0.30 : 0)
+  const totalCosts   = estIngred + labourCost + estOverhead
+  const estProfit    = current ? current.revenue - totalCosts : 0
+  const estMargin    = current && current.revenue > 0
+    ? (estProfit / current.revenue) * 100
+    : 0
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -179,7 +180,7 @@ const estMargin   = (estProfit / current.revenue) * 100
           {/* ── Profit Estimate ───────────────────────────────────── */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">
-              Profit Estimate
+              Net Profit Estimate
               <span className="ml-2 text-xs font-normal text-gray-400">
                 Ingredients + overhead = 30% estimate until recipes complete
               </span>
@@ -192,7 +193,7 @@ const estMargin   = (estProfit / current.revenue) * 100
                   Actual Wages Paid This Week
                 </label>
                 <p className="text-xs text-blue-500">
-                  Enter real wages to get accurate profit. Leave blank to use 30% estimate.
+                  Enter real wages for accurate profit. Leave blank to use 30% estimate.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -212,7 +213,7 @@ const estMargin   = (estProfit / current.revenue) * 100
               </div>
             </div>
 
-            {/* Cost breakdown table */}
+            {/* Cost breakdown */}
             <div className="space-y-2 mb-4">
               <div className="flex justify-between items-center py-2 border-b border-gray-100">
                 <span className="text-sm text-gray-600">Revenue (ex-GST)</span>
@@ -240,7 +241,7 @@ const estMargin   = (estProfit / current.revenue) * 100
                   )}
                 </div>
                 <span className="font-mono text-blue-600">
-                  -{fmt(wagesEntered ? wages : current.revenue * 0.30)}
+                  -{fmt(labourCost)}
                 </span>
               </div>
               <div className="flex justify-between items-center py-2 border-b border-gray-100">
@@ -257,7 +258,7 @@ const estMargin   = (estProfit / current.revenue) * 100
                   <span className={`text-sm font-bold ${
                     estProfit >= 0 ? 'text-green-700' : 'text-red-700'
                   }`}>
-                    Est. Gross Profit
+                    Est. Net Profit
                   </span>
                   <span className={`text-xs ml-2 ${
                     estMargin >= 10 ? 'text-green-600' : 'text-red-600'
@@ -277,33 +278,22 @@ const estMargin   = (estProfit / current.revenue) * 100
             {current.revenue > 0 && (
               <div>
                 <div className="flex h-4 rounded-full overflow-hidden bg-gray-100">
-                  <div
-                    className="bg-amber-400"
-                    style={{ width: '30%' }}
-                    title="Ingredients 30%"
-                  />
+                  <div className="bg-amber-400" style={{ width: '30%' }} />
                   <div
                     className="bg-blue-400"
                     style={{
                       width: `${wagesEntered
-                        ? (wages / current.revenue) * 100
+                        ? Math.min((wages / current.revenue) * 100, 100)
                         : 30}%`
                     }}
-                    title="Labour"
                   />
-                  <div
-                    className="bg-purple-400"
-                    style={{ width: '30%' }}
-                    title="Overhead 30%"
-                  />
-                  <div
-                    className={estProfit >= 0 ? 'bg-green-400 flex-1' : 'bg-red-400 flex-1'}
-                    title="Profit"
-                  />
+                  <div className="bg-purple-400" style={{ width: '30%' }} />
+                  <div className={estProfit >= 0 ? 'bg-green-400 flex-1' : 'bg-red-400 flex-1'} />
                 </div>
                 <div className="flex gap-4 mt-2 text-xs text-gray-500 flex-wrap">
                   <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 bg-amber-400 rounded-full" />Ingredients 30%
+                    <span className="w-2 h-2 bg-amber-400 rounded-full" />
+                    Ingredients 30%
                   </span>
                   <span className="flex items-center gap-1">
                     <span className="w-2 h-2 bg-blue-400 rounded-full" />
@@ -312,13 +302,14 @@ const estMargin   = (estProfit / current.revenue) * 100
                       : 'Labour 30% (est)'}
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 bg-purple-400 rounded-full" />Overhead 30%
+                    <span className="w-2 h-2 bg-purple-400 rounded-full" />
+                    Overhead 30%
                   </span>
                   <span className="flex items-center gap-1">
                     <span className={`w-2 h-2 rounded-full ${
                       estProfit >= 0 ? 'bg-green-400' : 'bg-red-400'
                     }`} />
-                    Profit {estMargin.toFixed(1)}%
+                    Net Profit {estMargin.toFixed(1)}%
                   </span>
                 </div>
               </div>
