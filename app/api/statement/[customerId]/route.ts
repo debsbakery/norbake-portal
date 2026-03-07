@@ -29,14 +29,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     }
 
-    // ── AR Transactions in period ─────────────────────────────
-    // ACTUAL columns: id, customer_id, type, invoice_id, amount,
-    //   balance_after, due_date, paid_date, description, created_at, amount_paid
-    // NOTE: column is "type" NOT "transaction_type"
-    //       column is "invoice_id" NOT "order_id"
+    // ── Fetch AR transactions (invoices + credits) ────────────
     let txQuery = supabase
       .from('ar_transactions')
-      .select('id, type, amount, amount_paid, description, created_at, invoice_id, balance_after')
+      .select('id, type, amount, description, created_at, invoice_id')
       .eq('customer_id', customerId)
       .order('created_at', { ascending: true })
 
@@ -44,23 +40,29 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     txQuery = txQuery.lte('created_at', endDate + 'T23:59:59')
 
     const { data: txRaw, error: txError } = await txQuery
-
-    if (txError) {
-      console.error('AR transactions error:', txError)
-      throw new Error(txError.message)
-    }
-
-    // Always an array — Supabase returns null when no rows
+    if (txError) throw new Error(txError.message)
     const transactions = txRaw ?? []
 
-    // ── Invoice numbers via invoice_id → invoice_numbers.id ───
-    // type values in DB: 'invoice' | 'credit' (no payments yet)
+    // ── Fetch payments in period ──────────────────────────────
+    let pmtQuery = supabase
+      .from('payments')
+      .select('id, amount, payment_date, payment_method, reference_number')
+      .eq('customer_id', customerId)
+      .order('payment_date', { ascending: true })
+
+    if (startDate) pmtQuery = pmtQuery.gte('payment_date', startDate)
+    pmtQuery = pmtQuery.lte('payment_date', endDate)
+
+    const { data: pmtRaw, error: pmtError } = await pmtQuery
+    if (pmtError) throw new Error(pmtError.message)
+    const payments = pmtRaw ?? []
+
+    // ── Invoice number map via invoice_id → invoice_numbers.id ─
     const invoiceIds = transactions
       .filter(t => t.invoice_id)
       .map(t => t.invoice_id as string)
 
     let invoiceMap: Record<string, string> = {}
-
     if (invoiceIds.length > 0) {
       const { data: invNums } = await supabase
         .from('invoice_numbers')
@@ -72,55 +74,103 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // ── Opening balance — all AR before period start ──────────
+    // ── Opening balance BEFORE period ─────────────────────────
     let openingBalance = 0
 
     if (startDate) {
-      const { data: priorRaw } = await supabase
+      // Prior invoices/credits
+      const { data: priorTxRaw } = await supabase
         .from('ar_transactions')
         .select('amount, type')
         .eq('customer_id', customerId)
         .lt('created_at', startDate)
 
-      const prior = priorRaw ?? []
-
-      openingBalance = prior.reduce((sum, tx) => {
-        // Credits and payments reduce the balance
-        const isCredit = tx.type === 'payment' || tx.type === 'credit'
+      const priorInvoiceTotal = (priorTxRaw ?? []).reduce((sum, tx) => {
+        const isCredit = tx.type === 'credit'
         return sum + (isCredit ? -Number(tx.amount) : Number(tx.amount))
       }, 0)
+
+      // Prior payments
+      const { data: priorPmtRaw } = await supabase
+        .from('payments')
+        .select('amount')
+        .eq('customer_id', customerId)
+        .lt('payment_date', startDate)
+
+      const priorPaymentTotal = (priorPmtRaw ?? []).reduce(
+        (sum, p) => sum + Number(p.amount), 0
+      )
+
+      openingBalance = priorInvoiceTotal - priorPaymentTotal
     }
 
-    // ── Build statement lines with running balance ─────────────
-    let runningBalance = openingBalance
+    // ── Merge invoices + payments into unified sorted lines ────
+    type RawLine = {
+      date: string      // ISO string for sorting
+      type: 'invoice' | 'credit' | 'payment'
+      amount: number
+      description: string
+      reference: string
+    }
 
-    const lines = transactions.map(tx => {
-      const isCredit = tx.type === 'payment' || tx.type === 'credit'
+    const rawLines: RawLine[] = []
 
-      runningBalance = isCredit
-        ? runningBalance - Number(tx.amount)
-        : runningBalance + Number(tx.amount)
-
-      const invoiceNum = tx.invoice_id
-        ? invoiceMap[tx.invoice_id]
-        : null
-
-      const reference = invoiceNum
+    // Add invoice/credit lines
+    for (const tx of transactions) {
+      const isCredit   = tx.type === 'credit'
+      const invoiceNum = tx.invoice_id ? invoiceMap[tx.invoice_id] : null
+      const reference  = invoiceNum
         ? `INV-${String(invoiceNum).padStart(4, '0')}`
         : String(tx.type ?? '').toUpperCase()
 
-      return {
-        date:             tx.created_at,
-        description:      isCredit
-          ? (tx.type === 'credit'
-              ? 'Credit note'
-              : 'Payment received - thank you')
-          : (tx.description || reference),
+      rawLines.push({
+        date:        tx.created_at,
+        type:        isCredit ? 'credit' : 'invoice',
+        amount:      Number(tx.amount),
+        description: tx.description || reference,
         reference,
-        debit:            isCredit ? null : Number(tx.amount),
-        credit:           isCredit ? Number(tx.amount) : null,
+      })
+    }
+
+    // Add payment lines
+    for (const pmt of payments) {
+      const method = pmt.payment_method
+        ? pmt.payment_method.replace(/_/g, ' ')
+        : 'payment'
+
+      rawLines.push({
+        // payment_date is a date string — add time for sorting
+        date:        pmt.payment_date + 'T12:00:00',
+        type:        'payment',
+        amount:      Number(pmt.amount),
+        description: `Payment received - thank you (${method})`,
+        reference:   pmt.reference_number || 'PAYMENT',
+      })
+    }
+
+    // Sort everything by date ascending
+    rawLines.sort((a, b) =>
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    )
+
+    // ── Build final lines with running balance ─────────────────
+    let runningBalance = openingBalance
+
+    const lines = rawLines.map(raw => {
+      const isCredit = raw.type === 'payment' || raw.type === 'credit'
+
+      runningBalance = isCredit
+        ? runningBalance - raw.amount
+        : runningBalance + raw.amount
+
+      return {
+        date:             raw.date,
+        description:      raw.description,
+        reference:        raw.reference,
+        debit:            isCredit ? null : raw.amount,
+        credit:           isCredit ? raw.amount : null,
         balance:          Math.round(runningBalance * 100) / 100,
-        transaction_type: tx.type,
+        transaction_type: raw.type,
       }
     })
 
@@ -129,7 +179,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       customer,
       lines,
       openingBalance: Math.round(openingBalance * 100) / 100,
-      closingBalance: Math.round(runningBalance * 100) / 100,
+      closingBalance: Math.round(runningBalance  * 100) / 100,
       startDate,
       endDate,
     })
