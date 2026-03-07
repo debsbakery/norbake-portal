@@ -13,8 +13,18 @@ import ProductsView from './products-view'
 
 type Tab = 'orders' | 'standing-orders' | 'pricing' | 'products'
 
-export default function AdminClientView({ pendingCount = 0 }: { pendingCount?: number }) {
-const [activeTab, setActiveTab] = useState<Tab>('orders')
+export default function AdminClientView({
+  pendingCount = 0,
+  weekRevenue = 0,
+  weekStart = '',
+  weekEnd = '',
+}: {
+  pendingCount?: number
+  weekRevenue?: number
+  weekStart?: string
+  weekEnd?: string
+}) {
+  const [activeTab, setActiveTab] = useState<Tab>('orders')
   const [testingStandingOrders, setTestingStandingOrders] = useState(false)
 
   async function testStandingOrderGeneration() {
@@ -39,7 +49,7 @@ const [activeTab, setActiveTab] = useState<Tab>('orders')
     }
   }
 
-  // ── Brisbane date (UTC+10, no DST) ────────────────────────────────────────
+  // ── Brisbane date (UTC+10, no DST) ─────────────────────────────
   const todayLabel = (() => {
     const brisbane = new Date(Date.now() + 10 * 60 * 60 * 1000)
     const iso = brisbane.toISOString().split('T')[0]
@@ -47,6 +57,11 @@ const [activeTab, setActiveTab] = useState<Tab>('orders')
       weekday: 'long', day: 'numeric', month: 'long',
     })
   })()
+
+  // ── Format week dates ───────────────────────────────────────────
+  const weekLabel = weekStart && weekEnd
+    ? `${new Date(weekStart + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – ${new Date(weekEnd + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`
+    : ''
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -57,6 +72,8 @@ const [activeTab, setActiveTab] = useState<Tab>('orders')
 
           {/* Top bar */}
           <div className="flex justify-between items-start py-4 gap-4">
+
+            {/* Left — title + weekly revenue */}
             <div className="shrink-0">
               <h1 className="text-2xl font-bold" style={{ color: '#006A4E' }}>
                 Admin Dashboard
@@ -64,6 +81,25 @@ const [activeTab, setActiveTab] = useState<Tab>('orders')
               <p className="text-sm text-gray-500 mt-0.5">
                 {todayLabel} — Deb's Bakery
               </p>
+              {weekRevenue > 0 && (
+                <div className="mt-2 inline-flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
+                  <BarChart3 className="h-4 w-4 text-green-600" />
+                  <div>
+                    <span className="text-xs text-green-600 font-medium">
+                      This Week ex-GST
+                    </span>
+                    <span className="ml-2 text-base font-bold text-green-700">
+                      ${weekRevenue.toLocaleString('en-AU', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+                    {weekLabel && (
+                      <span className="ml-2 text-xs text-green-500">{weekLabel}</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Action buttons */}
@@ -81,7 +117,6 @@ const [activeTab, setActiveTab] = useState<Tab>('orders')
                 <Receipt className="h-4 w-4" />Direct Invoice
               </a>
 
-              {/* ✅ NEW — Packing Slips button */}
               <a href="/admin/batch-packing-slips"
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
                 style={{ backgroundColor: '#0369a1' }}>
@@ -106,17 +141,17 @@ const [activeTab, setActiveTab] = useState<Tab>('orders')
                 <Users className="h-4 w-4" />Customers
               </a>
 
-            <a href="/admin/customers/pending"
-  className="relative flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
-  style={{ backgroundColor: '#ea580c' }}>
-  <Clock className="h-4 w-4" />
-  Pending
-  {pendingCount > 0 && (
-    <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
-      {pendingCount}
-    </span>
-  )}
-</a>
+              <a href="/admin/customers/pending"
+                className="relative flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+                style={{ backgroundColor: '#ea580c' }}>
+                <Clock className="h-4 w-4" />
+                Pending
+                {pendingCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
+                    {pendingCount}
+                  </span>
+                )}
+              </a>
 
               <a href="/admin/customers/repeat-order-search"
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
@@ -129,11 +164,13 @@ const [activeTab, setActiveTab] = useState<Tab>('orders')
                 style={{ backgroundColor: '#1f2937' }}>
                 <DollarSign className="h-4 w-4" />AR Dashboard
               </a>
-<a href="/admin/reports/weekly"
-  className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
-  style={{ backgroundColor: '#7c3aed' }}>
-  <BarChart3 className="h-4 w-4" />Weekly Report
-</a>
+
+              <a href="/admin/reports/weekly"
+                className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+                style={{ backgroundColor: '#7c3aed' }}>
+                <BarChart3 className="h-4 w-4" />Weekly Report
+              </a>
+
               <a href="/admin/payments/record"
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
                 style={{ backgroundColor: '#16a34a' }}>

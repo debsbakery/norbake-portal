@@ -6,86 +6,101 @@ import WeeklyReportView from './weekly-report-view'
 export default async function WeeklyReportPage() {
   const supabase = createAdminClient()
 
-  // ── Weekly revenue summary ─────────────────────────────────────
-  const { data: weeklyData } = await supabase
-    .rpc('get_weekly_revenue')
-    .limit(12)
+  // ── Fetch order items (ex-GST subtotals) ──────────────────────
+  const { data: items } = await supabase
+    .from('order_items')
+    .select(`
+      subtotal,
+      quantity,
+      product_name,
+      orders!inner (
+        id,
+        delivery_date,
+        status,
+        customer_id
+      )
+    `)
+    .in('orders.status', ['invoiced', 'pending'])
+    .gte('orders.delivery_date', '2026-01-01')
 
-  // Fallback if RPC doesn't exist — use raw query via JS
-  const { data: orders } = await supabase
-    .from('orders')
-    .select('delivery_date, total_amount, status, customer_business_name, customer_id')
-    .in('status', ['invoiced', 'pending'])
-    .gte('delivery_date', '2026-01-01')
-    .order('delivery_date', { ascending: false })
-
-  // ── Group by week in JS ────────────────────────────────────────
+  // ── Group by week (Sun–Sat, Brisbane UTC+10) ──────────────────
   const weekMap = new Map<string, {
-    week_start: string
-    first_day: string
-    last_day: string
-    order_count: number
-    revenue: number
+    week_start:       string
+    first_day:        string
+    last_day:         string
+    order_ids:        Set<string>
+    revenue:          number
     invoiced_revenue: number
-    pending_revenue: number
-    customer_count: number
-    customers: Set<string>
+    pending_revenue:  number
+    customers:        Set<string>
   }>()
 
-  for (const order of orders ?? []) {
-    const date   = new Date(order.delivery_date + 'T00:00:00Z')
-    const day    = date.getUTCDay() // 0=Sun, 1=Mon
-    const diff   = (day === 0 ? -6 : 1) - day // adjust to Monday
-    const monday = new Date(date)
-    monday.setUTCDate(date.getUTCDate() + diff)
-    const weekKey = monday.toISOString().split('T')[0]
+  for (const item of items ?? []) {
+    const order = item.orders as any
+    if (!order?.delivery_date) continue
+
+    // Calculate Sunday of that week (Brisbane)
+    const date = new Date(order.delivery_date + 'T00:00:00Z')
+    const day  = date.getUTCDay() // 0=Sun
+    const sun  = new Date(date)
+    sun.setUTCDate(date.getUTCDate() - day)
+    const weekKey = sun.toISOString().split('T')[0]
 
     if (!weekMap.has(weekKey)) {
       weekMap.set(weekKey, {
-        week_start:        weekKey,
-        first_day:         order.delivery_date,
-        last_day:          order.delivery_date,
-        order_count:       0,
-        revenue:           0,
-        invoiced_revenue:  0,
-        pending_revenue:   0,
-        customer_count:    0,
-        customers:         new Set(),
+        week_start:       weekKey,
+        first_day:        order.delivery_date,
+        last_day:         order.delivery_date,
+        order_ids:        new Set(),
+        revenue:          0,
+        invoiced_revenue: 0,
+        pending_revenue:  0,
+        customers:        new Set(),
       })
     }
 
     const week = weekMap.get(weekKey)!
-    week.order_count++
-    week.revenue += Number(order.total_amount ?? 0)
-    if (order.status === 'invoiced') week.invoiced_revenue += Number(order.total_amount ?? 0)
-    if (order.status === 'pending')  week.pending_revenue  += Number(order.total_amount ?? 0)
+    const subtotal = Number(item.subtotal ?? 0)
+
+    week.order_ids.add(order.id)
+    week.revenue += subtotal
+    if (order.status === 'invoiced') week.invoiced_revenue += subtotal
+    if (order.status === 'pending')  week.pending_revenue  += subtotal
     if (order.customer_id) week.customers.add(order.customer_id)
     if (order.delivery_date < week.first_day) week.first_day = order.delivery_date
     if (order.delivery_date > week.last_day)  week.last_day  = order.delivery_date
   }
 
   const weeks = Array.from(weekMap.values())
-    .map(w => ({ ...w, customer_count: w.customers.size, customers: undefined }))
+    .map(w => ({
+      week_start:       w.week_start,
+      first_day:        w.first_day,
+      last_day:         w.last_day,
+      order_count:      w.order_ids.size,
+      revenue:          w.revenue,
+      invoiced_revenue: w.invoiced_revenue,
+      pending_revenue:  w.pending_revenue,
+      customer_count:   w.customers.size,
+    }))
     .sort((a, b) => b.week_start.localeCompare(a.week_start))
     .slice(0, 12)
 
-  // ── Top products this week ─────────────────────────────────────
+  // ── Top products this week (ex-GST) ───────────────────────────
   const thisWeekStart = weeks[0]?.week_start
-  const { data: topProducts } = await supabase
+
+  const { data: thisWeekItems } = await supabase
     .from('order_items')
     .select(`
       product_name,
       quantity,
-      unit_price,
       subtotal,
       orders!inner ( delivery_date, status )
     `)
     .in('orders.status', ['invoiced', 'pending'])
     .gte('orders.delivery_date', thisWeekStart ?? '2026-01-01')
 
-  // Group top products
   const productMap = new Map<string, { name: string; qty: number; revenue: number }>()
-  for (const item of topProducts ?? []) {
+  for (const item of thisWeekItems ?? []) {
     const name = item.product_name ?? 'Unknown'
     if (!productMap.has(name)) {
       productMap.set(name, { name, qty: 0, revenue: 0 })
