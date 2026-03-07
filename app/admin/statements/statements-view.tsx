@@ -5,8 +5,9 @@ import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import {
   FileText, Mail, Send, Users, DollarSign,
-  Loader2, CheckCircle, XCircle, Calendar,
+  Loader2, Calendar, ArrowLeft,
 } from 'lucide-react'
+import Link from 'next/link'
 
 interface Customer {
   id: string
@@ -41,7 +42,6 @@ export default function StatementsView({ customers, customersWithBalance }: Prop
   const [results, setResults]                   = useState<SendResult[]>([])
   const [showResults, setShowResults]           = useState(false)
 
-  // ── Date range calculation ────────────────────────────────
   const getDateRange = (): { startDate: string; endDate: string } => {
     const now = new Date()
     switch (period) {
@@ -69,28 +69,24 @@ export default function StatementsView({ customers, customersWithBalance }: Prop
     }
   }
 
-  // ── Which customers to process ────────────────────────────
   const getTargetCustomers = () => {
-    if (selectedCustomer === 'all') return customersWithBalance
-    if (selectedCustomer === 'all_customers') return customers
+    if (selectedCustomer === 'all')           return customersWithBalance
+    if (selectedCustomer === 'all_customers') return customers.filter(c => c.email)
     return customers.filter(c => c.id === selectedCustomer)
   }
 
-  // ── Print / download PDF ──────────────────────────────────
-  const handlePrint = async (customerId: string) => {
+  const handlePrint = async (customerId: string, customerName: string) => {
     const { startDate, endDate } = getDateRange()
     const params = new URLSearchParams({ startDate, endDate })
-
     setIsPrinting(true)
     try {
-      const res = await fetch(`/api/statement/${customerId}?${params}`)
+      const res  = await fetch(`/api/statement/${customerId}?${params}`)
       if (!res.ok) throw new Error('Failed to generate PDF')
-
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
       a.href     = url
-      a.download = `statement-${customerId}-${endDate}.pdf`
+      a.download = `statement-${customerName.replace(/\s+/g, '-')}-${endDate}.pdf`
       a.click()
       URL.revokeObjectURL(url)
     } catch (err: any) {
@@ -100,18 +96,13 @@ export default function StatementsView({ customers, customersWithBalance }: Prop
     }
   }
 
-  // ── Email single customer ─────────────────────────────────
   const handleEmailSingle = async (customerId: string, customerName: string) => {
     const { startDate, endDate } = getDateRange()
     const params = new URLSearchParams({ startDate, endDate })
-
     if (!confirm(`Send statement to ${customerName}?`)) return
-
     setIsSending(true)
     try {
-      const res = await fetch(`/api/statement/${customerId}/email?${params}`, {
-        method: 'POST',
-      })
+      const res  = await fetch(`/api/statement/${customerId}/email?${params}`, { method: 'POST' })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)
       alert(`Statement sent to ${customerName}`)
@@ -122,64 +113,44 @@ export default function StatementsView({ customers, customersWithBalance }: Prop
     }
   }
 
-  // ── Batch email all ───────────────────────────────────────
   const handleSendAll = async () => {
     const targets = getTargetCustomers()
-    if (targets.length === 0) {
-      alert('No customers to send to')
-      return
-    }
+    if (targets.length === 0) { alert('No customers to send to'); return }
 
     const { startDate, endDate } = getDateRange()
     const noEmail = targets.filter(c => !c.email)
 
-    const confirmMsg = [
-      `Send statements to ${targets.length} customer(s)?`,
-      `Period: ${startDate} to ${endDate}`,
-      noEmail.length > 0 ? `\n${noEmail.length} customer(s) have no email and will be skipped.` : '',
-    ].join('\n')
-
-    if (!confirm(confirmMsg)) return
+    if (!confirm(
+      `Send statements to ${targets.length} customer(s)?\n` +
+      `Period: ${startDate} to ${endDate}` +
+      (noEmail.length > 0 ? `\n${noEmail.length} skipped (no email)` : '')
+    )) return
 
     setIsSending(true)
     setShowResults(false)
-    setResults([])
 
     try {
-      const res = await fetch('/api/statement/send-all', {
-        method: 'POST',
+      const res  = await fetch('/api/statement/send-all', {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           startDate,
           endDate,
-          // Pass specific customer IDs if not sending to all
-          customerIds: selectedCustomer === 'all' || selectedCustomer === 'all_customers'
-            ? undefined
-            : [selectedCustomer],
           balanceOnly: selectedCustomer === 'all',
+          customerIds: selectedCustomer !== 'all' && selectedCustomer !== 'all_customers'
+            ? [selectedCustomer]
+            : undefined,
         }),
       })
-
       const json = await res.json()
-
       if (!res.ok) throw new Error(json.error)
 
-      // Build results display
-      const resultList: SendResult[] = [
-        ...(json.errors ?? []).map((e: string) => {
-          const [name, ...rest] = e.split(': ')
-          return { customer: name, success: false, error: rest.join(': ') }
-        }),
-      ]
-
-      // Add successes (total - failures)
-      const successCount = json.sent
-      setResults(resultList)
+      setResults((json.errors ?? []).map((e: string) => {
+        const [name, ...rest] = e.split(': ')
+        return { customer: name, success: false, error: rest.join(': ') }
+      }))
       setShowResults(true)
-
-      alert(
-        `Done!\n\nSent: ${json.sent}\nFailed: ${json.failed}\nTotal: ${json.total}`
-      )
+      alert(`Done!\n\nSent: ${json.sent}\nFailed: ${json.failed}\nTotal: ${json.total}`)
     } catch (err: any) {
       alert('Batch send failed: ' + err.message)
     } finally {
@@ -188,7 +159,7 @@ export default function StatementsView({ customers, customersWithBalance }: Prop
   }
 
   const { startDate, endDate } = getDateRange()
-  const targets = getTargetCustomers()
+  const targets  = getTargetCustomers()
   const totalOwed = customersWithBalance.reduce(
     (s, c) => s + parseFloat(String(c.balance || 0)), 0
   )
@@ -196,11 +167,23 @@ export default function StatementsView({ customers, customersWithBalance }: Prop
   return (
     <div className="p-6 max-w-6xl mx-auto">
 
+      {/* ── Back button ───────────────────────────────────── */}
+      <div className="mb-5">
+        <Link
+          href="/admin"
+          className="flex items-center gap-1 text-sm hover:opacity-80 w-fit"
+          style={{ color: '#CE1126' }}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Admin
+        </Link>
+      </div>
+
       {/* ── Page title ───────────────────────────────────── */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Customer Statements</h1>
         <p className="text-gray-500 text-sm mt-1">
-          Generate and email account statements — monthly schedule runs automatically
+          Generate and email account statements
         </p>
       </div>
 
@@ -217,7 +200,7 @@ export default function StatementsView({ customers, customersWithBalance }: Prop
         </div>
         <div className="bg-white rounded-lg border p-4 flex items-center gap-3">
           <div className="p-2 bg-amber-50 rounded-lg">
-            <DollarSign className="h-5 w-5 text-amber-600" />
+            <Users className="h-5 w-5 text-amber-600" />
           </div>
           <div>
             <p className="text-xs text-gray-500">Customers with Balance</p>
@@ -238,7 +221,6 @@ export default function StatementsView({ customers, customersWithBalance }: Prop
       {/* ── Controls ─────────────────────────────────────── */}
       <div className="bg-white rounded-lg border p-5 mb-6 space-y-5">
 
-        {/* Period selector */}
         <div>
           <p className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
             <Calendar className="h-4 w-4" /> Statement Period
@@ -268,31 +250,23 @@ export default function StatementsView({ customers, customersWithBalance }: Prop
             <div className="flex gap-3 mt-3">
               <div>
                 <label className="text-xs text-gray-500 block mb-1">From</label>
-                <input
-                  type="date"
-                  value={customFrom}
+                <input type="date" value={customFrom}
                   onChange={e => setCustomFrom(e.target.value)}
-                  className="border rounded px-3 py-1.5 text-sm"
-                />
+                  className="border rounded px-3 py-1.5 text-sm" />
               </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">To</label>
-                <input
-                  type="date"
-                  value={customTo}
+                <input type="date" value={customTo}
                   onChange={e => setCustomTo(e.target.value)}
-                  className="border rounded px-3 py-1.5 text-sm"
-                />
+                  className="border rounded px-3 py-1.5 text-sm" />
               </div>
             </div>
           )}
-
           <p className="text-xs text-gray-400 mt-2">
             Selected: {startDate} to {endDate}
           </p>
         </div>
 
-        {/* Customer selector */}
         <div>
           <p className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
             <Users className="h-4 w-4" /> Send To
@@ -321,49 +295,58 @@ export default function StatementsView({ customers, customersWithBalance }: Prop
           </select>
         </div>
 
-        {/* Action buttons */}
         <div className="flex flex-wrap gap-3 pt-2 border-t">
           <Button
             onClick={handleSendAll}
             disabled={isSending}
             className="bg-green-700 hover:bg-green-800 text-white gap-2"
           >
-            {isSending ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Sending...</>
-            ) : (
-              <><Send className="h-4 w-4" /> Email {targets.length} Statement{targets.length !== 1 ? 's' : ''}</>
-            )}
+            {isSending
+              ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending...</>
+              : <><Send className="h-4 w-4" /> Email {targets.length} Statement{targets.length !== 1 ? 's' : ''}</>
+            }
           </Button>
 
           {selectedCustomer !== 'all' && selectedCustomer !== 'all_customers' && (
             <Button
-              onClick={() => handlePrint(selectedCustomer)}
+              onClick={() => {
+                const c = customers.find(c => c.id === selectedCustomer)
+                handlePrint(selectedCustomer, c?.business_name || c?.contact_name || selectedCustomer)
+              }}
               disabled={isPrinting}
               variant="outline"
               className="gap-2"
             >
-              {isPrinting ? (
-                <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
-              ) : (
-                <><FileText className="h-4 w-4" /> Download PDF</>
-              )}
+              {isPrinting
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
+                : <><FileText className="h-4 w-4" /> Download PDF</>
+              }
             </Button>
           )}
         </div>
       </div>
 
-      {/* ── Per-customer table ────────────────────────────── */}
+      {/* ── Results ───────────────────────────────────────── */}
+      {showResults && results.filter(r => !r.success).length > 0 && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm font-semibold text-red-800 mb-2">Failed sends:</p>
+          <ul className="text-xs text-red-700 space-y-1">
+            {results.filter(r => !r.success).map((r, i) => (
+              <li key={i}>{r.customer}: {r.error}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* ── Customer table ────────────────────────────────── */}
       <div className="bg-white rounded-lg border overflow-hidden">
         <div className="px-5 py-4 border-b flex items-center justify-between">
-          <h2 className="font-semibold text-gray-800">
-            Customers with Outstanding Balance
-          </h2>
+          <h2 className="font-semibold text-gray-800">Customers with Outstanding Balance</h2>
           <span className="text-sm text-gray-500">{customersWithBalance.length} customers</span>
         </div>
 
         {customersWithBalance.length === 0 ? (
           <div className="p-8 text-center text-gray-400">
-            <CheckCircle className="h-10 w-10 mx-auto mb-2 text-green-500" />
             <p className="font-medium">All accounts are clear!</p>
           </div>
         ) : (
@@ -383,9 +366,9 @@ export default function StatementsView({ customers, customersWithBalance }: Prop
                 return (
                   <tr key={customer.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium">{name}</td>
-                    <td className="px-4 py-3 text-gray-500">
+                    <td className="px-4 py-3 text-gray-500 text-xs">
                       {customer.email ?? (
-                        <span className="text-amber-500 text-xs">No email</span>
+                        <span className="text-amber-500">No email</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-red-600">
@@ -394,7 +377,7 @@ export default function StatementsView({ customers, customersWithBalance }: Prop
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
                         <button
-                          onClick={() => handlePrint(customer.id)}
+                          onClick={() => handlePrint(customer.id, name)}
                           className="text-gray-600 hover:text-gray-900 flex items-center gap-1 text-xs border rounded px-2 py-1 hover:bg-gray-100"
                         >
                           <FileText className="h-3 w-3" /> PDF
@@ -422,10 +405,11 @@ export default function StatementsView({ customers, customersWithBalance }: Prop
       <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
         <p className="font-semibold mb-1">Automatic Monthly Schedule</p>
         <p>
-          Statements are emailed automatically on the <strong>1st of each month</strong> to all
-          customers with a balance greater than $0. The cron job runs at <strong>8:00 AM AEST</strong>.
+          Statements auto-email on the <strong>1st of each month</strong> to all
+          customers with balance greater than $0 at <strong>8:00 AM AEST</strong>.
         </p>
       </div>
+
     </div>
   )
 }
