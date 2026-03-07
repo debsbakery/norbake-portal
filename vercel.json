@@ -1,8 +1,1 @@
-﻿{
-  "crons": [
-    {
-      "path": "/api/cron/monthly-statements",
-      "schedule": "0 22 28-31 * *"
-    }
-  ]
-}
+﻿{"version":2}
