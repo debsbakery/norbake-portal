@@ -37,6 +37,7 @@ interface RecipeLine {
   } | null
   sub_recipes?: {
     id: string
+    name?: string | null
     products?: { name: string } | null
   } | null
 }
@@ -71,7 +72,6 @@ export default function RecipeBuilder({
   const [adding, setAdding] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
 
-  // ── Is this a base recipe (no product linked)? ────────────────────
   const isBaseRecipe = !recipe.product_id
 
   async function saveName() {
@@ -148,14 +148,15 @@ export default function RecipeBuilder({
   }, 0)
 
   const totalCost = lines.reduce((sum, line) => {
-  if (line.ingredient_id && line.ingredients) {
-    return sum + ((line.quantity_grams || 0) / 1000) * line.ingredients.unit_cost
-  }
-  if (line.sub_recipe_id && subRecipeCosts[line.sub_recipe_id]) {
-    return sum + (line.sub_qty_grams || 0) * subRecipeCosts[line.sub_recipe_id]
-  }
-  return sum
-}, 0)
+    if (line.ingredient_id && line.ingredients) {
+      return sum + ((line.quantity_grams || 0) / 1000) * line.ingredients.unit_cost
+    }
+    if (line.sub_recipe_id && subRecipeCosts[line.sub_recipe_id]) {
+      return sum + (line.sub_qty_grams || 0) * subRecipeCosts[line.sub_recipe_id]
+    }
+    return sum
+  }, 0)
+
   const costPerKg = totalWeight > 0 ? totalCost / (totalWeight / 1000) : 0
 
   return (
@@ -207,7 +208,7 @@ export default function RecipeBuilder({
         </div>
       )}
 
-      {/* ── Base Ingredient Selector (optional) ──────────────────── */}
+      {/* ── Scaling Ingredient (optional) ────────────────────────── */}
       <div className="bg-white border border-gray-200 rounded-xl p-6">
         <h2 className="text-base font-semibold text-gray-800 mb-1">
           Scaling Ingredient
@@ -267,30 +268,44 @@ export default function RecipeBuilder({
             <tbody className="divide-y divide-gray-100">
               {lines.map((line) => (
                 <tr key={line.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-right text-gray-600">
-  {line.ingredient_id && line.ingredients ? (
-    `$${(((line.quantity_grams || 0) / 1000) * line.ingredients.unit_cost).toFixed(2)}`
-  ) : line.sub_recipe_id && subRecipeCosts[line.sub_recipe_id] ? (
-    <span className="text-indigo-600">
-      ${((line.sub_qty_grams || 0) * subRecipeCosts[line.sub_recipe_id]).toFixed(2)}
-      <span className="text-xs text-gray-400 ml-1">
-        (${(subRecipeCosts[line.sub_recipe_id] * 1000).toFixed(3)}/kg)
-      </span>
-    </span>
-  ) : (
-    <span className="text-gray-300">—</span>
-  )}
-</td>
+
+                  {/* ── Name column ── */}
+                  <td className="px-4 py-3">
+                    {line.ingredient_id ? (
+                      <span className="font-medium text-gray-900">
+                        {line.ingredients?.name}
+                      </span>
+                    ) : (
+                      <span className="text-indigo-600 font-medium">
+                        {line.sub_recipes?.name ||
+                          line.sub_recipes?.products?.name ||
+                          'Sub-Recipe'}
+                      </span>
+                    )}
+                  </td>
+
+                  {/* ── Quantity column ── */}
                   <td className="px-4 py-3 text-right font-mono text-gray-700">
                     {(line.quantity_grams || line.sub_qty_grams || 0).toLocaleString()}g
                   </td>
+
+                  {/* ── Cost column ── */}
                   <td className="px-4 py-3 text-right text-gray-600">
                     {line.ingredient_id && line.ingredients ? (
                       `$${(((line.quantity_grams || 0) / 1000) * line.ingredients.unit_cost).toFixed(2)}`
+                    ) : line.sub_recipe_id && subRecipeCosts[line.sub_recipe_id] ? (
+                      <span className="text-indigo-600">
+                        ${((line.sub_qty_grams || 0) * subRecipeCosts[line.sub_recipe_id]).toFixed(2)}
+                        <span className="text-xs text-gray-400 ml-1">
+                          (${(subRecipeCosts[line.sub_recipe_id] * 1000).toFixed(3)}/kg)
+                        </span>
+                      </span>
                     ) : (
                       <span className="text-gray-300">—</span>
                     )}
                   </td>
+
+                  {/* ── Actions column ── */}
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => deleteLine(line.id)}
@@ -300,6 +315,7 @@ export default function RecipeBuilder({
                       <Trash2 className="h-4 w-4 inline" />
                     </button>
                   </td>
+
                 </tr>
               ))}
             </tbody>
@@ -354,7 +370,7 @@ export default function RecipeBuilder({
               onChange={() => setNewLine({ ...newLine, type: 'sub_recipe' })}
               className="w-4 h-4"
             />
-            <span className="text-sm text-gray-700">Sub-Recipe</span>
+            <span className="text-sm text-gray-700">Sub-Recipe (shared dough/mix)</span>
           </label>
         </div>
 
@@ -378,7 +394,9 @@ export default function RecipeBuilder({
             </div>
           ) : (
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Sub-Recipe</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Shared Recipe (e.g. White Dough)
+              </label>
               <select
                 value={newLine.sub_recipe_id}
                 onChange={(e) => setNewLine({ ...newLine, sub_recipe_id: e.target.value })}
@@ -388,7 +406,7 @@ export default function RecipeBuilder({
                 <option value="">— Select recipe —</option>
                 {allRecipes.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.name || r.products?.name || 'Unnamed Base Recipe'}
+                    {r.name || r.products?.name || 'Unnamed Recipe'}
                   </option>
                 ))}
               </select>
@@ -405,7 +423,7 @@ export default function RecipeBuilder({
               step="1"
               value={newLine.quantity_grams}
               onChange={(e) => setNewLine({ ...newLine, quantity_grams: e.target.value })}
-              placeholder="e.g. 25000"
+              placeholder="e.g. 850"
               className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               required
               key={newLine.type}
@@ -439,5 +457,3 @@ export default function RecipeBuilder({
     </div>
   )
 }
-
-

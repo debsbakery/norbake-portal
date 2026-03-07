@@ -8,10 +8,8 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await req.json()
-
     const supabase = createAdminClient()
 
-    // Build update object from whatever fields are sent
     const updates: Record<string, any> = {}
     if ('base_ingredient_id' in body) updates.base_ingredient_id = body.base_ingredient_id || null
     if ('name' in body) updates.name = body.name || null
@@ -25,9 +23,35 @@ export async function PATCH(
       .update(updates)
       .eq('id', id)
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    return NextResponse.json({ ok: true })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const supabase = createAdminClient()
+
+    // Delete lines first
+    await supabase
+      .from('recipe_lines')
+      .delete()
+      .eq('recipe_id', id)
+
+    // Then delete recipe
+    const { error } = await supabase
+      .from('recipes')
+      .delete()
+      .eq('id', id)
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     return NextResponse.json({ ok: true })
   } catch (err: any) {
