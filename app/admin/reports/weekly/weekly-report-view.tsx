@@ -42,9 +42,14 @@ const fmtDate = (d: string) =>
 const fmtWeek = (start: string, end: string) =>
   `${fmtDate(start)} – ${fmtDate(end)}`
 
-export default function WeeklyReportView({ weeks, topProducts, thisWeekStart,  overheadPerKg, }: Props) {
+export default function WeeklyReportView({
+  weeks,
+  topProducts,
+  thisWeekStart,
+  overheadPerKg,
+}: Props) {
   const [selectedWeek, setSelectedWeek] = useState(0)
-  const [actualWages, setActualWages] = useState<Record<string, string>>({})
+  const [actualWages, setActualWages]   = useState<Record<string, string>>({})
 
   const current  = weeks[selectedWeek]
   const previous = weeks[selectedWeek + 1]
@@ -59,27 +64,24 @@ export default function WeeklyReportView({ weeks, topProducts, thisWeekStart,  o
 
   const maxRevenue = Math.max(...weeks.map(w => w.revenue))
 
-  // ── Profit estimate — ALL declared in correct order ───────────
- // ── Profit estimate ───────────────────────────────────────────
-const wages        = parseFloat(actualWages[current?.week_start] || '0') || 0
-const wagesEntered = wages > 0
-const estIngred    = current ? current.revenue * 0.30 : 0
+  // ── Profit estimate ───────────────────────────────────────────
+  const wages         = parseFloat(actualWages[current?.week_start] || '0') || 0
+  const wagesEntered  = wages > 0
+  const estIngred     = current ? current.revenue * 0.30 : 0
+  const weightKg      = current ? current.total_weight_kg : 0
+  const hasWeightData = weightKg > 0
+  const estOverhead   = hasWeightData
+    ? weightKg * overheadPerKg
+    : (current ? current.revenue * 0.30 : 0)
+  const labourCost    = wagesEntered
+    ? wages
+    : (current ? current.revenue * 0.30 : 0)
+  const totalCosts    = estIngred + labourCost + estOverhead
+  const estProfit     = current ? current.revenue - totalCosts : 0
+  const estMargin     = current && current.revenue > 0
+    ? (estProfit / current.revenue) * 100
+    : 0
 
-// ✅ Weight-based overhead
-const weightKg     = current ? current.total_weight_kg : 0
-const hasWeightData = weightKg > 0
-const estOverhead  = hasWeightData
-  ? weightKg * overheadPerKg                    // actual weight × $/kg
-  : (current ? current.revenue * 0.30 : 0)      // fallback to 30% if no weights
-
-const labourCost   = wagesEntered
-  ? wages
-  : (current ? current.revenue * 0.30 : 0)
-const totalCosts   = estIngred + labourCost + estOverhead
-const estProfit    = current ? current.revenue - totalCosts : 0
-const estMargin    = current && current.revenue > 0
-  ? (estProfit / current.revenue) * 100
-  : 0
   return (
     <div className="space-y-6 max-w-6xl">
 
@@ -215,68 +217,83 @@ const estMargin    = current && current.revenue > 0
                   value={actualWages[current.week_start] || ''}
                   onChange={e => setActualWages(prev => ({
                     ...prev,
-                    [current.week_start]: e.target.value
+                    [current.week_start]: e.target.value,
                   }))}
                   className="w-32 border border-blue-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
 
-            {/* Cost breakdown */}
+            {/* Cost breakdown rows */}
             <div className="space-y-2 mb-4">
+
+              {/* Revenue */}
               <div className="flex justify-between items-center py-2 border-b border-gray-100">
                 <span className="text-sm text-gray-600">Revenue (ex-GST)</span>
                 <span className="font-mono font-semibold text-gray-900">
                   {fmt(current.revenue)}
                 </span>
               </div>
-            {/* Ingredients */}
-<div className="flex justify-between items-center py-2 border-b border-gray-100">
-  <span className="text-sm text-gray-600">
-    Est. Ingredients
-    <span className="text-xs text-gray-400 ml-1">(30% est.)</span>
-  </span>
-  <div className="text-right">
-    <span className="font-mono text-amber-600">-{fmt(estIngred)}</span>
-    <span className="text-xs text-amber-500 ml-2">
-      {current.revenue > 0 ? ((estIngred / current.revenue) * 100).toFixed(1) : 0}%
-    </span>
-  </div>
-</div>
 
-{/* Labour */}
-<div className="flex justify-between items-center py-2 border-b border-gray-100">
-  <div>
-    <span className="text-sm text-gray-600">
-      {wagesEntered ? 'Actual Wages' : 'Est. Labour'}
-    </span>
-    {!wagesEntered && <span className="text-xs text-gray-400 ml-1">(30% est.)</span>}
-    {wagesEntered && <span className="text-xs text-blue-600 ml-1 font-medium">actual</span>}
-  </div>
-  <div className="text-right">
-    <span className="font-mono text-blue-600">-{fmt(labourCost)}</span>
-    <span className="text-xs text-blue-500 ml-2">
-      {current.revenue > 0 ? ((labourCost / current.revenue) * 100).toFixed(1) : 0}%
-    </span>
-  </div>
-</div>
+              {/* Ingredients */}
+              <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                <span className="text-sm text-gray-600">
+                  Est. Ingredients
+                  <span className="text-xs text-gray-400 ml-1">(30% est.)</span>
+                </span>
+                <div className="text-right">
+                  <span className="font-mono text-amber-600">-{fmt(estIngred)}</span>
+                  <span className="text-xs text-amber-500 ml-2">
+                    {current.revenue > 0
+                      ? ((estIngred / current.revenue) * 100).toFixed(1)
+                      : 0}%
+                  </span>
+                </div>
+              </div>
 
-{/* Overhead */}
-<div className="flex justify-between items-center py-2 border-b border-gray-100">
-  <span className="text-sm text-gray-600">
-    Est. Overhead
-    {hasWeightData
-      ? <span className="text-xs text-gray-400 ml-1">({weightKg.toFixed(0)}kg × ${overheadPerKg}/kg)</span>
-      : <span className="text-xs text-gray-400 ml-1">(30% est.)</span>
-    }
-  </span>
-  <div className="text-right">
-    <span className="font-mono text-purple-600">-{fmt(estOverhead)}</span>
-    <span className="text-xs text-purple-500 ml-2">
-      {current.revenue > 0 ? ((estOverhead / current.revenue) * 100).toFixed(1) : 0}%
-    </span>
-  </div>
-</div>
+              {/* Labour */}
+              <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                <div>
+                  <span className="text-sm text-gray-600">
+                    {wagesEntered ? 'Actual Wages' : 'Est. Labour'}
+                  </span>
+                  {!wagesEntered && (
+                    <span className="text-xs text-gray-400 ml-1">(30% est.)</span>
+                  )}
+                  {wagesEntered && (
+                    <span className="text-xs text-blue-600 ml-1 font-medium">actual</span>
+                  )}
+                </div>
+                <div className="text-right">
+                  <span className="font-mono text-blue-600">-{fmt(labourCost)}</span>
+                  <span className="text-xs text-blue-500 ml-2">
+                    {current.revenue > 0
+                      ? ((labourCost / current.revenue) * 100).toFixed(1)
+                      : 0}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Overhead */}
+              <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                <span className="text-sm text-gray-600">
+                  Est. Overhead
+                  {hasWeightData
+                    ? <span className="text-xs text-gray-400 ml-1">({weightKg.toFixed(0)}kg × ${overheadPerKg}/kg)</span>
+                    : <span className="text-xs text-gray-400 ml-1">(30% est.)</span>
+                  }
+                </span>
+                <div className="text-right">
+                  <span className="font-mono text-purple-600">-{fmt(estOverhead)}</span>
+                  <span className="text-xs text-purple-500 ml-2">
+                    {current.revenue > 0
+                      ? ((estOverhead / current.revenue) * 100).toFixed(1)
+                      : 0}%
+                  </span>
+                </div>
+              </div>
+
+            </div>{/* ← closes space-y-2 mb-4 */}
 
             {/* Visual bar */}
             {current.revenue > 0 && (
@@ -288,11 +305,11 @@ const estMargin    = current && current.revenue > 0
                     style={{
                       width: `${wagesEntered
                         ? Math.min((wages / current.revenue) * 100, 100)
-                        : 30}%`
+                        : 30}%`,
                     }}
                   />
                   <div className="bg-purple-400" style={{ width: '30%' }} />
-                  <div className={estProfit >= 0 ? 'bg-green-400 flex-1' : 'bg-red-400 flex-1'} />
+                  <div className={`flex-1 ${estProfit >= 0 ? 'bg-green-400' : 'bg-red-400'}`} />
                 </div>
                 <div className="flex gap-4 mt-2 text-xs text-gray-500 flex-wrap">
                   <span className="flex items-center gap-1">
@@ -318,7 +335,25 @@ const estMargin    = current && current.revenue > 0
                 </div>
               </div>
             )}
-          </div>
+
+            {/* Net profit total row */}
+            <div className="flex justify-between items-center pt-4 mt-2 border-t-2 border-gray-200">
+              <span className="text-sm font-bold text-gray-800">Est. Net Profit</span>
+              <div className="text-right">
+                <span className={`font-mono font-bold text-lg ${
+                  estProfit >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {fmt(estProfit)}
+                </span>
+                <span className={`text-xs ml-2 ${
+                  estMargin >= 10 ? 'text-green-500' : 'text-red-500'
+                }`}>
+                  {estMargin.toFixed(1)}% margin
+                </span>
+              </div>
+            </div>
+
+          </div>{/* ← closes Profit Estimate card */}
 
           {/* ── Invoiced vs Pending ───────────────────────────────── */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -364,15 +399,16 @@ const estMargin    = current && current.revenue > 0
               </span>
             </div>
           </div>
+
         </>
-      )}
+      )}{/* ← closes {current && ( */}
 
       {/* ── Weekly Bar Chart ──────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-4">Revenue by Week</h3>
         <div className="flex items-end gap-2 h-40">
           {[...weeks].reverse().map((w, i) => {
-            const height = maxRevenue > 0 ? (w.revenue / maxRevenue) * 100 : 0
+            const height     = maxRevenue > 0 ? (w.revenue / maxRevenue) * 100 : 0
             const isSelected = w.week_start === weeks[selectedWeek]?.week_start
             return (
               <button
