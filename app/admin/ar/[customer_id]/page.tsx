@@ -43,18 +43,24 @@ async function getCustomerLedger(customerId: string) {
     .eq('customer_id', customerId)
     .order('credit_date', { ascending: true })
 
+  // Build invoiceMap (invoice_numbers.id -> invoice_number)
+  // Build orderIdMap (invoice_numbers.id -> order_id)
+  // order_id is what invoice_payments.invoice_id expects (FK to orders.id)
   const invoiceIds = (arTxRaw ?? [])
     .filter((t: any) => t.invoice_id)
     .map((t: any) => t.invoice_id as string)
 
   let invoiceMap: Record<string, string> = {}
+  let orderIdMap: Record<string, string> = {}
+
   if (invoiceIds.length > 0) {
     const { data: invNums } = await supabase
       .from('invoice_numbers')
-      .select('id, invoice_number')
+      .select('id, invoice_number, order_id')
       .in('id', invoiceIds)
     for (const inv of invNums ?? []) {
       invoiceMap[inv.id] = inv.invoice_number
+      if (inv.order_id) orderIdMap[inv.id] = inv.order_id
     }
   }
 
@@ -70,6 +76,8 @@ async function getCustomerLedger(customerId: string) {
     outstanding: number
     paid_status: 'paid' | 'partial' | 'unpaid' | 'na'
     due_date: string | null
+    invoice_id: string | null
+    order_id: string | null
   }
 
   const entries: LedgerEntry[] = []
@@ -81,7 +89,7 @@ async function getCustomerLedger(customerId: string) {
     const outstanding = isCredit ? 0 : Math.max(txAmount - amtPaid, 0)
     const invoiceNum  = tx.invoice_id ? invoiceMap[tx.invoice_id] : null
     const reference   = invoiceNum
-      ? `INV-${String(invoiceNum).padStart(4, '0')}`
+      ? 'INV-' + String(invoiceNum).padStart(4, '0')
       : String(tx.type ?? '').toUpperCase()
 
     const paidStatus: 'paid' | 'partial' | 'unpaid' | 'na' = isCredit
@@ -92,29 +100,31 @@ async function getCustomerLedger(customerId: string) {
       ? 'partial'
       : 'unpaid'
 
-   entries.push({
-  id:          tx.id,
-  date:        tx.created_at,
-  type:        isCredit ? 'credit' : 'invoice',
-  description: tx.description || reference,
-  debit:       isCredit ? 0 : txAmount,
-  credit:      isCredit ? txAmount : 0,
-  balance:     0,
-  amount_paid: amtPaid,
-  outstanding,
-  paid_status: paidStatus,
-  due_date:    tx.due_date || null,
-  invoice_id:  tx.invoice_id || null, 
-})
+    entries.push({
+      id:          tx.id,
+      date:        tx.created_at,
+      type:        isCredit ? 'credit' : 'invoice',
+      description: tx.description || reference,
+      debit:       isCredit ? 0 : txAmount,
+      credit:      isCredit ? txAmount : 0,
+      balance:     0,
+      amount_paid: amtPaid,
+      outstanding,
+      paid_status: paidStatus,
+      due_date:    tx.due_date || null,
+      invoice_id:  tx.invoice_id || null,
+      order_id:    tx.invoice_id ? (orderIdMap[tx.invoice_id] ?? null) : null,
+    })
   }
 
   for (const pmt of pmtRaw ?? []) {
     const method = (pmt.payment_method ?? '').replace(/_/g, ' ') || 'payment'
+    const ref    = pmt.reference_number ? ' - ' + pmt.reference_number : ''
     entries.push({
       id:          pmt.id,
       date:        pmt.payment_date + 'T12:00:00',
       type:        'payment',
-      description: `Payment received (${method})${pmt.reference_number ? ` - ${pmt.reference_number}` : ''}`,
+      description: 'Payment received (' + method + ')' + ref,
       debit:       0,
       credit:      Number(pmt.amount),
       balance:     0,
@@ -122,16 +132,20 @@ async function getCustomerLedger(customerId: string) {
       outstanding: 0,
       paid_status: 'na',
       due_date:    null,
+      invoice_id:  null,
+      order_id:    null,
     })
   }
 
   for (const cm of creditRaw ?? []) {
-    const cmAmount = Math.abs(Number(cm.total_amount || cm.amount || 0))
+    const cmAmount  = Math.abs(Number(cm.total_amount || cm.amount || 0))
+    const creditNum = cm.credit_number ? cm.credit_number + ' - ' : ''
+    const creditTyp = cm.credit_type === 'stale_return' ? 'Stale Return' : 'Product Credit'
     entries.push({
       id:          cm.id,
       date:        cm.credit_date || cm.created_at,
       type:        'credit',
-      description: `Credit ${cm.credit_number || ''} - ${cm.credit_type === 'stale_return' ? 'Stale Return' : 'Product Credit'}`,
+      description: 'Credit ' + creditNum + creditTyp,
       debit:       0,
       credit:      cmAmount,
       balance:     0,
@@ -139,6 +153,8 @@ async function getCustomerLedger(customerId: string) {
       outstanding: 0,
       paid_status: 'na',
       due_date:    null,
+      invoice_id:  null,
+      order_id:    null,
     })
   }
 
@@ -190,9 +206,14 @@ export default async function CustomerLedgerPage({
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
-      <Link href="/admin/ar" className="flex items-center gap-1 text-sm mb-4 hover:opacity-80" style={{ color: '#CE1126' }}>
+      <Link
+        href="/admin/ar"
+        className="flex items-center gap-1 text-sm mb-4 hover:opacity-80"
+        style={{ color: '#CE1126' }}
+      >
         <ArrowLeft className="h-4 w-4" /> Back to AR
       </Link>
+
       <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
         <div className="flex justify-between items-start">
           <div>
@@ -200,17 +221,27 @@ export default async function CustomerLedgerPage({
               {customer.business_name || customer.contact_name}
             </h1>
             <p className="text-gray-500 text-sm mt-0.5">{customer.email}</p>
-            {customer.address && <p className="text-gray-400 text-xs mt-1">{customer.address}</p>}
+            {customer.address && (
+              <p className="text-gray-400 text-xs mt-1">{customer.address}</p>
+            )}
           </div>
           <div className="text-right">
             <p className="text-xs text-gray-500 mb-1">Current Balance</p>
-            <p className="text-3xl font-bold" style={{ color: currentBalance > 0 ? '#CE1126' : '#006A4E' }}>
+            <p
+              className="text-3xl font-bold"
+              style={{ color: currentBalance > 0 ? '#CE1126' : '#006A4E' }}
+            >
               {formatCurrency(Math.abs(currentBalance))}
             </p>
-            {currentBalance < 0 && <p className="text-xs text-green-600 mt-1">Credit balance</p>}
-            {currentBalance === 0 && <p className="text-xs text-green-600 mt-1">Account clear</p>}
+            {currentBalance < 0 && (
+              <p className="text-xs text-green-600 mt-1">Credit balance</p>
+            )}
+            {currentBalance === 0 && (
+              <p className="text-xs text-green-600 mt-1">Account clear</p>
+            )}
           </div>
         </div>
+
         <div className="grid grid-cols-4 gap-3 mt-5">
           <div className="p-3 bg-red-50 rounded-lg border border-red-100">
             <p className="text-xs text-red-500">Total Invoiced</p>
@@ -224,17 +255,25 @@ export default async function CustomerLedgerPage({
             <p className="text-xs text-orange-500">Credits Applied</p>
             <p className="text-lg font-bold text-orange-700">{formatCurrency(totalCredits)}</p>
           </div>
-          <div className="p-3 rounded-lg border" style={{ backgroundColor: currentBalance > 0 ? '#fef2f2' : '#f0fdf4' }}>
+          <div
+            className="p-3 rounded-lg border"
+            style={{ backgroundColor: currentBalance > 0 ? '#fef2f2' : '#f0fdf4' }}
+          >
             <p className="text-xs text-gray-500">Balance Due</p>
-            <p className="text-lg font-bold" style={{ color: currentBalance > 0 ? '#CE1126' : '#006A4E' }}>
+            <p
+              className="text-lg font-bold"
+              style={{ color: currentBalance > 0 ? '#CE1126' : '#006A4E' }}
+            >
               {formatCurrency(currentBalance)}
             </p>
           </div>
         </div>
       </div>
+
       <div className="mb-6">
         <StatementActions customer={customer} />
       </div>
+
       <CustomerLedgerClient
         customerId={customer_id}
         customer={customer}

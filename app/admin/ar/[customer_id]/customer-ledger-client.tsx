@@ -7,6 +7,7 @@ import {
   Plus, Loader2, X, AlertCircle,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { Interface } from 'node:readline'
 
 interface LedgerEntry {
   id: string
@@ -21,8 +22,8 @@ interface LedgerEntry {
   paid_status: 'paid' | 'partial' | 'unpaid' | 'na'
   due_date: string | null
   invoice_id: string | null
+  order_id: string | null   
 }
-
 interface Props {
   customerId: string
   customer: any
@@ -66,33 +67,33 @@ export default function CustomerLedgerClient({
 
   // Build FIFO allocations from unpaid invoices
   function buildFifoAllocations(amount: number) {
-    const allocs: { invoice_id: string; amount: number }[] = []
-    let remaining = amount
-    for (const inv of unpaidInvoices) {
-      if (remaining <= 0) break
-      if (!inv.invoice_id) continue
-      const outstanding = inv.debit - inv.amount_paid
-      const applying   = Math.min(remaining, outstanding)
-      if (applying > 0) {
-        allocs.push({ invoice_id: inv.invoice_id, amount: Math.round(applying * 100) / 100 })
-        remaining -= applying
-      }
+  const allocs: { invoice_id: string; amount: number }[] = []
+  let remaining = amount
+  for (const inv of unpaidInvoices) {
+    if (remaining <= 0) break
+    const allocId = inv.order_id ?? inv.invoice_id  // use order_id (FK to orders.id)
+    if (!allocId) continue
+    const outstanding = inv.debit - inv.amount_paid
+    const applying    = Math.min(remaining, outstanding)
+    if (applying > 0) {
+      allocs.push({ invoice_id: allocId, amount: Math.round(applying * 100) / 100 })
+      remaining -= applying
     }
-    return allocs
   }
+  return allocs
+}
 
   // Build manual allocations from checkboxes
-  function buildManualAllocations() {
-    const allocs: { invoice_id: string; amount: number }[] = []
-    for (const [invoice_id, amtStr] of Object.entries(manualAlloc)) {
-      const amt = parseFloat(amtStr)
-      if (amt > 0 && invoice_id) {
-        allocs.push({ invoice_id, amount: Math.round(amt * 100) / 100 })
-      }
+function buildManualAllocations() {
+  const allocs: { invoice_id: string; amount: number }[] = []
+  for (const [id, amtStr] of Object.entries(manualAlloc)) {
+    const amt = parseFloat(amtStr)
+    if (amt > 0 && id) {
+      allocs.push({ invoice_id: id, amount: Math.round(amt * 100) / 100 })
     }
-    return allocs
   }
-
+  return allocs
+}
   const handleRecordPayment = async () => {
     const amount = parseFloat(payAmount)
     if (!payAmount || amount <= 0) {
@@ -447,11 +448,11 @@ export default function CustomerLedgerClient({
                                 step="0.01"
                                 max={outstanding.toFixed(2)}
                                 placeholder={outstanding.toFixed(2)}
-                                value={manualAlloc[inv.invoice_id ?? inv.id] ?? ''}
-                                onChange={e => setManualAlloc(prev => ({
-                                  ...prev,
-                                  [inv.invoice_id ?? inv.id]: e.target.value,
-                                }))}
+value={manualAlloc[inv.order_id ?? inv.invoice_id ?? inv.id] ?? ''}
+onChange={e => setManualAlloc(prev => ({
+  ...prev,
+  [inv.order_id ?? inv.invoice_id ?? inv.id]: e.target.value,
+}))}
                                 className="w-full px-2 py-1 text-xs focus:outline-none"
                               />
                             </div>
