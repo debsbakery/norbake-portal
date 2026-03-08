@@ -2,7 +2,14 @@
 
 import { useState } from 'react'
 import { formatCurrency } from '@/lib/utils'
-import { DollarSign, FileText, MinusCircle, Plus, Loader2, X } from 'lucide-react'
+import {
+  DollarSign,
+  FileText,
+  MinusCircle,
+  Plus,
+  Loader2,
+  X,
+} from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface LedgerEntry {
@@ -13,9 +20,10 @@ interface LedgerEntry {
   debit: number
   credit: number
   balance: number
-   amount_paid?: number
-  outstanding?: number
-  paid_status?: 'paid' | 'partial' | 'unpaid'
+  amount_paid: number
+  outstanding: number
+  paid_status: 'paid' | 'partial' | 'unpaid' | 'na'
+  due_date: string | null
 }
 
 interface Props {
@@ -43,17 +51,16 @@ export default function CustomerLedgerClient({
 }: Props) {
   const router = useRouter()
 
-  // ── Payment modal state ───────────────────────────────────
-  const [showPayment, setShowPayment]   = useState(false)
-  const [payAmount, setPayAmount]       = useState('')
-  const [payDate, setPayDate]           = useState(
+  const [showPayment, setShowPayment] = useState(false)
+  const [payAmount, setPayAmount]     = useState('')
+  const [payDate, setPayDate]         = useState(
     new Date().toISOString().split('T')[0]
   )
-  const [payMethod, setPayMethod]       = useState('bank_transfer')
-  const [payRef, setPayRef]             = useState('')
-  const [payNotes, setPayNotes]         = useState('')
-  const [saving, setSaving]             = useState(false)
-  const [error, setError]               = useState('')
+  const [payMethod, setPayMethod]     = useState('bank_transfer')
+  const [payRef, setPayRef]           = useState('')
+  const [payNotes, setPayNotes]       = useState('')
+  const [saving, setSaving]           = useState(false)
+  const [error, setError]             = useState('')
 
   const handleRecordPayment = async () => {
     if (!payAmount || parseFloat(payAmount) <= 0) {
@@ -72,7 +79,7 @@ export default function CustomerLedgerClient({
           amount:           parseFloat(payAmount),
           payment_date:     payDate,
           payment_method:   payMethod,
-          reference_number: payRef || null,
+          reference_number: payRef   || null,
           notes:            payNotes || null,
           allocations:      [],
         }),
@@ -85,7 +92,7 @@ export default function CustomerLedgerClient({
       setPayAmount('')
       setPayRef('')
       setPayNotes('')
-      router.refresh() // reload server data
+      router.refresh()
 
     } catch (err: any) {
       setError(err.message)
@@ -96,7 +103,7 @@ export default function CustomerLedgerClient({
 
   return (
     <>
-      {/* ── Record Payment button ─────────────────────────── */}
+      {/* Header row */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-semibold text-gray-800">
           Transaction Ledger
@@ -115,7 +122,7 @@ export default function CustomerLedgerClient({
         )}
       </div>
 
-      {/* ── Ledger table ──────────────────────────────────── */}
+      {/* Ledger table */}
       <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -124,6 +131,7 @@ export default function CustomerLedgerClient({
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Date</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Type</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Description</th>
+                <th className="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Status</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Charges</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Payments</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Balance</th>
@@ -132,7 +140,7 @@ export default function CustomerLedgerClient({
             <tbody className="divide-y divide-gray-100">
               {entries.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
                     No transactions found
                   </td>
                 </tr>
@@ -149,39 +157,64 @@ export default function CustomerLedgerClient({
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                       {formatAusDate(entry.date)}
                     </td>
-                    // After the description cell — add paid status badge
-<td className="px-4 py-3 text-right text-sm">
-  {entry.type === 'invoice' && (
-    <>
-      {entry.paid_status === 'paid' && (
-        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-          PAID
-        </span>
-      )}
-      {entry.paid_status === 'partial' && (
-        <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">
-          PART ${entry.amount_paid?.toFixed(2)}
-        </span>
-      )}
-      {entry.paid_status === 'unpaid' && (
-        <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
-          UNPAID
-        </span>
-      )}
-    </>
-  )}
-</td>
+
+                    <td className="px-4 py-3">
+                      {entry.type === 'invoice' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">
+                          <FileText className="h-3 w-3" /> Invoice
+                        </span>
+                      )}
+                      {entry.type === 'payment' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
+                          <DollarSign className="h-3 w-3" /> Payment
+                        </span>
+                      )}
+                      {entry.type === 'credit' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-medium">
+                          <MinusCircle className="h-3 w-3" /> Credit
+                        </span>
+                      )}
+                    </td>
+
                     <td className="px-4 py-3 text-gray-700 max-w-xs truncate">
                       {entry.description}
                     </td>
+
+                    {/* Paid status badge */}
+                    <td className="px-3 py-3 text-center">
+                      {entry.type === 'invoice' && (
+                        <>
+                          {entry.paid_status === 'paid' && (
+                            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                              PAID
+                            </span>
+                          )}
+                          {entry.paid_status === 'partial' && (
+                            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-medium whitespace-nowrap">
+                              PART ${entry.amount_paid.toFixed(2)}
+                            </span>
+                          )}
+                          {entry.paid_status === 'unpaid' && (
+                            <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                              UNPAID
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </td>
+
                     <td className="px-4 py-3 text-right font-mono text-red-600">
                       {entry.debit > 0 ? formatCurrency(entry.debit) : '—'}
                     </td>
+
                     <td className="px-4 py-3 text-right font-mono text-green-600">
                       {entry.credit > 0 ? formatCurrency(entry.credit) : '—'}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono font-semibold"
-                      style={{ color: entry.balance > 0 ? '#CE1126' : '#006A4E' }}>
+
+                    <td
+                      className="px-4 py-3 text-right font-mono font-semibold"
+                      style={{ color: entry.balance > 0 ? '#CE1126' : '#006A4E' }}
+                    >
                       {formatCurrency(entry.balance)}
                     </td>
                   </tr>
@@ -192,12 +225,11 @@ export default function CustomerLedgerClient({
         </div>
       </div>
 
-      {/* ── Record Payment Modal ──────────────────────────── */}
+      {/* Record Payment Modal */}
       {showPayment && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
 
-            {/* Modal header */}
             <div className="flex items-center justify-between p-5 border-b">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Record Payment</h3>
@@ -214,7 +246,6 @@ export default function CustomerLedgerClient({
               </button>
             </div>
 
-            {/* Modal body */}
             <div className="p-5 space-y-4">
 
               {error && (
@@ -223,7 +254,6 @@ export default function CustomerLedgerClient({
                 </div>
               )}
 
-              {/* Amount */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Amount <span className="text-red-500">*</span>
@@ -241,17 +271,14 @@ export default function CustomerLedgerClient({
                     autoFocus
                   />
                 </div>
-                {currentBalance > 0 && (
-                  <button
-                    onClick={() => setPayAmount(currentBalance.toFixed(2))}
-                    className="text-xs text-green-700 mt-1 hover:underline"
-                  >
-                    Pay full balance ({formatCurrency(currentBalance)})
-                  </button>
-                )}
+                <button
+                  onClick={() => setPayAmount(currentBalance.toFixed(2))}
+                  className="text-xs text-green-700 mt-1 hover:underline"
+                >
+                  Pay full balance ({formatCurrency(currentBalance)})
+                </button>
               </div>
 
-              {/* Date */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Payment Date <span className="text-red-500">*</span>
@@ -264,7 +291,6 @@ export default function CustomerLedgerClient({
                 />
               </div>
 
-              {/* Method */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Payment Method
@@ -282,7 +308,6 @@ export default function CustomerLedgerClient({
                 </select>
               </div>
 
-              {/* Reference */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Reference Number
@@ -296,7 +321,6 @@ export default function CustomerLedgerClient({
                 />
               </div>
 
-              {/* Notes */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Notes
@@ -311,7 +335,6 @@ export default function CustomerLedgerClient({
               </div>
             </div>
 
-            {/* Modal footer */}
             <div className="flex gap-3 p-5 border-t bg-gray-50 rounded-b-xl">
               <button
                 onClick={() => { setShowPayment(false); setError('') }}

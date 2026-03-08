@@ -12,7 +12,6 @@ import CustomerLedgerClient from './customer-ledger-client'
 async function getCustomerLedger(customerId: string) {
   const supabase = createAdminClient()
 
-  // ── Customer ──────────────────────────────────────────────
   const { data: customer } = await supabase
     .from('customers')
     .select('*')
@@ -21,7 +20,6 @@ async function getCustomerLedger(customerId: string) {
 
   if (!customer) return null
 
-  // ── AR transactions ───────────────────────────────────────
   const { data: arTxRaw, error: arError } = await supabase
     .from('ar_transactions')
     .select('id, type, amount, amount_paid, description, created_at, invoice_id, due_date')
@@ -33,21 +31,18 @@ async function getCustomerLedger(customerId: string) {
     throw new Error(arError.message)
   }
 
-  // ── Payments ──────────────────────────────────────────────
   const { data: pmtRaw } = await supabase
     .from('payments')
     .select('id, amount, payment_date, payment_method, reference_number')
     .eq('customer_id', customerId)
     .order('payment_date', { ascending: true })
 
-  // ── Credit memos ──────────────────────────────────────────
   const { data: creditRaw } = await supabase
     .from('credit_memos')
     .select('id, credit_number, credit_date, total_amount, amount, credit_type, created_at')
     .eq('customer_id', customerId)
     .order('credit_date', { ascending: true })
 
-  // ── Invoice number map ────────────────────────────────────
   const invoiceIds = (arTxRaw ?? [])
     .filter(t => t.invoice_id)
     .map(t => t.invoice_id as string)
@@ -63,7 +58,6 @@ async function getCustomerLedger(customerId: string) {
     }
   }
 
-  // ── Type definition ───────────────────────────────────────
   type LedgerEntry = {
     id: string
     date: string
@@ -80,7 +74,6 @@ async function getCustomerLedger(customerId: string) {
 
   const entries: LedgerEntry[] = []
 
-  // ── AR transactions → invoices + credits ──────────────────
   for (const tx of arTxRaw ?? []) {
     const isCredit    = tx.type === 'credit'
     const txAmount    = Number(tx.amount      || 0)
@@ -107,14 +100,13 @@ async function getCustomerLedger(customerId: string) {
       debit:       isCredit ? 0 : txAmount,
       credit:      isCredit ? txAmount : 0,
       balance:     0,
-      amount_paid:  amtPaid,
+      amount_paid: amtPaid,
       outstanding,
-      paid_status:  paidStatus,
+      paid_status: paidStatus,
       due_date:    tx.due_date || null,
     })
   }
 
-  // ── Payments ──────────────────────────────────────────────
   for (const pmt of pmtRaw ?? []) {
     const method = pmt.payment_method?.replace(/_/g, ' ') || 'payment'
     entries.push({
@@ -125,14 +117,13 @@ async function getCustomerLedger(customerId: string) {
       debit:       0,
       credit:      Number(pmt.amount),
       balance:     0,
-      amount_paid:  0,
-      outstanding:  0,
-      paid_status:  'na',
+      amount_paid: 0,
+      outstanding: 0,
+      paid_status: 'na',
       due_date:    null,
     })
   }
 
-  // ── Credit memos ──────────────────────────────────────────
   for (const cm of creditRaw ?? []) {
     const cmAmount = Math.abs(Number(cm.total_amount || cm.amount || 0))
     entries.push({
@@ -145,14 +136,13 @@ async function getCustomerLedger(customerId: string) {
       debit:       0,
       credit:      cmAmount,
       balance:     0,
-      amount_paid:  0,
-      outstanding:  0,
-      paid_status:  'na',
+      amount_paid: 0,
+      outstanding: 0,
+      paid_status: 'na',
       due_date:    null,
     })
   }
 
-  // ── Sort + running balance ────────────────────────────────
   entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
   let running = 0
@@ -161,7 +151,6 @@ async function getCustomerLedger(customerId: string) {
     e.balance = Math.round(running * 100) / 100
   }
 
-  // ── Totals ────────────────────────────────────────────────
   const totalInvoiced = entries
     .filter(e => e.type === 'invoice')
     .reduce((s, e) => s + e.debit, 0)
@@ -175,7 +164,7 @@ async function getCustomerLedger(customerId: string) {
 
   return {
     customer,
-    entries:        [...entries].reverse(),
+    entries:       [...entries].reverse(),
     totalInvoiced,
     totalPaid,
     totalCredits,
@@ -207,19 +196,11 @@ export default async function CustomerLedgerPage({
     )
   }
 
-  const {
-    customer,
-    entries,
-    totalInvoiced,
-    totalPaid,
-    totalCredits,
-    currentBalance,
-  } = data
+  const { customer, entries, totalInvoiced, totalPaid, totalCredits, currentBalance } = data
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
 
-      {/* Back */}
       <Link
         href="/admin/ar"
         className="flex items-center gap-1 text-sm mb-4 hover:opacity-80"
@@ -228,7 +209,6 @@ export default async function CustomerLedgerPage({
         <ArrowLeft className="h-4 w-4" /> Back to AR
       </Link>
 
-      {/* Customer header */}
       <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
         <div className="flex justify-between items-start">
           <div>
@@ -257,25 +237,18 @@ export default async function CustomerLedgerPage({
           </div>
         </div>
 
-        {/* Summary cards */}
         <div className="grid grid-cols-4 gap-3 mt-5">
           <div className="p-3 bg-red-50 rounded-lg border border-red-100">
             <p className="text-xs text-red-500">Total Invoiced</p>
-            <p className="text-lg font-bold text-red-700">
-              {formatCurrency(totalInvoiced)}
-            </p>
+            <p className="text-lg font-bold text-red-700">{formatCurrency(totalInvoiced)}</p>
           </div>
           <div className="p-3 bg-green-50 rounded-lg border border-green-100">
             <p className="text-xs text-green-500">Total Paid</p>
-            <p className="text-lg font-bold text-green-700">
-              {formatCurrency(totalPaid)}
-            </p>
+            <p className="text-lg font-bold text-green-700">{formatCurrency(totalPaid)}</p>
           </div>
           <div className="p-3 bg-orange-50 rounded-lg border border-orange-100">
             <p className="text-xs text-orange-500">Credits Applied</p>
-            <p className="text-lg font-bold text-orange-700">
-              {formatCurrency(totalCredits)}
-            </p>
+            <p className="text-lg font-bold text-orange-700">{formatCurrency(totalCredits)}</p>
           </div>
           <div
             className="p-3 rounded-lg border"
@@ -292,12 +265,10 @@ export default async function CustomerLedgerPage({
         </div>
       </div>
 
-      {/* Statement actions */}
       <div className="mb-6">
         <StatementActions customer={customer} />
       </div>
 
-      {/* Client component — ledger table + record payment modal */}
       <CustomerLedgerClient
         customerId={customer_id}
         customer={customer}
