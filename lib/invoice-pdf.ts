@@ -88,7 +88,7 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<jsPDF> {
   doc.text(bakery.address, margin + 30, yPos + 30);
   if (bakery.abn) {
     doc.setFont('helvetica', 'bold');
-    doc.text(`ABN: ${bakery.abn}`, margin + 30, yPos + 36);
+ doc.text('ABN: ' + bakery.abn, margin + 30, yPos + 36);
   }
 
   // ── TAX INVOICE title ─────────────────────────────────────────────────────
@@ -106,7 +106,6 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<jsPDF> {
   doc.setFont('helvetica', 'bold');
   doc.text('Invoice Number:', 210 - 85, yPos + 8);
   doc.text('Invoice Date:',   210 - 85, yPos + 16);
-  doc.text('Order Date:',     210 - 85, yPos + 24);
   doc.text('Order ID:',       210 - 85, yPos + 32);
 
   doc.setFont('helvetica', 'normal');
@@ -116,13 +115,11 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<jsPDF> {
     : `TEMP-${order.id.slice(0, 8).toUpperCase()}`;
 
   const invoiceDate = new Date(`${order.delivery_date}T00:00:00`).toLocaleDateString('en-AU');
-  const orderDate   = new Date(order.created_at).toLocaleDateString('en-AU');
   const orderId     = order.id.slice(0, 8).toUpperCase();
 
   doc.text(invoiceNum,  210 - margin - 2, yPos + 8,  { align: 'right' });
   doc.text(invoiceDate, 210 - margin - 2, yPos + 16, { align: 'right' });
-  doc.text(orderDate,   210 - margin - 2, yPos + 24, { align: 'right' });
-  doc.text(orderId,     210 - margin - 2, yPos + 32, { align: 'right' });
+  doc.text(orderId,     210 - margin - 2, yPos + 24, { align: 'right' });
 
   // ── Customer / Bill To ────────────────────────────────────────────────────
   yPos = 60;
@@ -171,11 +168,11 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<jsPDF> {
 
     let poLine = '';
     if ((order as any).purchase_order_number) {
-      poLine = `PO Number: ${(order as any).purchase_order_number}`;
+   poLine = 'PO Number: ' + (order as any).purchase_order_number;
     }
     if ((order as any).docket_number) {
       if (poLine) poLine += '  |  ';
-      poLine += `Docket Number: ${(order as any).docket_number}`;
+ poLine += 'Docket Number: ' + (order as any).docket_number;
     }
 
     doc.text(poLine, margin + 5, yPos + 10);
@@ -202,7 +199,7 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<jsPDF> {
     const hasGST = item.gst_applicable !== false;
     return [
       (item as any).product_code || (item as any).code || '--',
-      item.product_name,
+      (item as any).custom_description || item.product_name,
       item.quantity.toString(),
       formatCurrency(item.unit_price),
       hasGST ? 'Yes' : 'No',
@@ -286,18 +283,10 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<jsPDF> {
 
     let bankLineY = bankY + 15;
     if (bakery.bankName) {
-      doc.text(`Bank: ${bakery.bankName}`, margin + 5, bankLineY);
-      bankLineY += 5;
-    }
-    if (bakery.bankBSB) {
-      doc.text(`BSB: ${bakery.bankBSB}`, margin + 5, bankLineY);
-      bankLineY += 5;
-    }
-    if (bakery.bankAccount) {
-      doc.text(`Account: ${bakery.bankAccount}`, margin + 5, bankLineY);
-      bankLineY += 5;
-    }
-    doc.text(`Reference: ${invoiceNum}`, margin + 5, bankLineY);
+      doc.text('Bank: ' + bakery.bankName, margin + 5, bankLineY);
+    doc.text('BSB: ' + bakery.bankBSB, margin + 5, bankLineY);
+    doc.text('Account: ' + bakery.bankAccount, margin + 5, bankLineY);
+    doc.text('Reference: ' + invoiceNum, margin + 5, bankLineY);
   }
 
   // ── Payment Terms ─────────────────────────────────────────────────────────
@@ -310,7 +299,7 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<jsPDF> {
   doc.setTextColor(...textColor);
 
   const paymentTerms = (order as any).payment_terms || 30;
-  doc.text(`Payment Terms: ${paymentTerms} days`, margin, termsY);
+ doc.text('Payment Terms: ' + paymentTerms + ' days', margin, termsY);
   doc.text('Payment Methods: Bank Transfer or Cash at delivery', margin, termsY + 5);
 
   // ── GST Statement ─────────────────────────────────────────────────────────
