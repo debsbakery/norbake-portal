@@ -38,7 +38,7 @@ export async function GET(
   subtotal,
   gst_applicable,
   product_name,
-  custom_description,        // ADD THIS LINE
+  custom_description,      
   products (
     id,
     code,
