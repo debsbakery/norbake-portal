@@ -1,7 +1,7 @@
-'use client'
+﻿'use client'
 import { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
-import { Download, Mail, Calendar, Loader2 } from 'lucide-react'
+import { Download, Mail, Calendar, Loader2, FileText } from 'lucide-react'
 import { addMonths, format } from 'date-fns'
 
 interface StatementActionsProps {
@@ -110,11 +110,11 @@ const handlePrintStatement = async () => {
         throw new Error(error.error || 'Failed to send statement')
       }
 
-      alert(`✅ Statement sent successfully to ${customer.email}`)
+      alert(`âœ… Statement sent successfully to ${customer.email}`)
 
     } catch (error: any) {
       console.error('Error sending statement:', error)
-      alert(`❌ Failed to send statement: ${error.message}`)
+      alert(`âŒ Failed to send statement: ${error.message}`)
     } finally {
       setIsSending(false)
     }
@@ -123,7 +123,7 @@ const handlePrintStatement = async () => {
   return (
     <div className="bg-white rounded-lg shadow-md p-6 border">
       <h3 className="text-lg font-semibold mb-4" style={{ color: '#006A4E' }}>
-        📄 Statement Actions
+        ðŸ“„ Statement Actions
       </h3>
 
       <div className="mb-4">
@@ -209,7 +209,7 @@ const handlePrintStatement = async () => {
 
       {!customer.email && (
         <p className="text-sm text-amber-600 mt-3 flex items-center gap-1">
-          <span>⚠️</span>
+          <span>âš ï¸</span>
           No email on file - email button disabled
         </p>
       )}
