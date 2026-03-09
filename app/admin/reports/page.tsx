@@ -24,6 +24,13 @@ export default async function ReportsPage() {
       color: '#CE1126',
     },
     {
+  title: 'Accountant Summary',
+  description: 'Monthly sales, AR, costs, and stock',
+  href: '/admin/reports/accountant',
+  icon: FileText,
+  color: '#006A4E',
+},
+    {
       title: 'GST Report',
       description: 'GST collected by period',
       href: '/admin/gst-report',
