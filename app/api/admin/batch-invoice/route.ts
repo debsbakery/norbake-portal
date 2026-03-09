@@ -92,27 +92,26 @@ async function generateInvoiceNumber(
 ): Promise<number> {
   // Idempotent — return existing if already assigned
   const { data: existing } = await supabase
-    .from('invoice_numbers')
-    .select('invoice_number')
-    .eq('order_id', orderId)
-    .maybeSingle()
+  .from('invoice_numbers')
+  .select('invoice_number')
+  .eq('order_id', orderId)
+  .maybeSingle() as { data: { invoice_number: number } | null }
 
   if (existing?.invoice_number) {
     return existing.invoice_number as number
   }
 
   const { data: maxRow } = await supabase
-    .from('invoice_numbers')
-    .select('invoice_number')
-    .order('invoice_number', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  .from('invoice_numbers')
+  .select('invoice_number')
+  .order('invoice_number', { ascending: false })
+  .limit(1)
+  .maybeSingle() as { data: { invoice_number: number } | null }
 
-  const nextNumber = ((maxRow?.invoice_number as number) ?? 0) + 1
-
+const nextNumber = ((maxRow?.invoice_number as unknown as number) ?? 0) + 1
   const { error: insertError } = await supabase
-    .from('invoice_numbers')
-    .insert({ order_id: orderId, invoice_number: nextNumber })
+  .from('invoice_numbers')
+  .insert({ order_id: orderId, invoice_number: nextNumber } as any)
 
   if (insertError) {
     console.error('Failed to insert invoice_number:', insertError)
@@ -382,16 +381,16 @@ export async function POST(request: NextRequest) {
         const dueDate      = computeDueDate(order.delivery_date, paymentTerms)
         const invoiceNum   = orderInvoiceMap.get(order.id)!
 
-        return {
-          customer_id: order.customer_id,
-          type:        'invoice',
-          amount:      order.total_amount,
-          amount_paid: 0,
-          invoice_id:  order.id,
-          description: `Invoice #${String(invoiceNum).padStart(6, '0')} - ${order.customers?.business_name ?? 'Customer'}`,
-          due_date:    dueDate.toISOString().split('T')[0],
-          created_at:  new Date().toISOString(),
-        }
+       return {
+  customer_id: order.customer_id,
+  type:        'invoice',
+  amount:      order.total_amount,
+  amount_paid: 0,
+  invoice_id:  order.id,
+  description: `Invoice #${String(invoiceNum).padStart(6, '0')} - ${order.customers?.business_name ?? 'Customer'}`,
+  due_date:    dueDate.toISOString().split('T')[0],
+  created_at:  order.delivery_date + 'T00:00:00+10:00',
+}
       })
 
       const { error: arError } = await supabase
