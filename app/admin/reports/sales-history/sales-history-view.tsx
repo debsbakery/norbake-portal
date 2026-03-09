@@ -259,116 +259,159 @@ export default function SalesHistoryView({ products, customers }: Props) {
       )}
 
       {/* Results Table */}
-      {items.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-            <div>
-              <h2 className="font-bold text-gray-800">Sales Results</h2>
-              <p className="text-xs text-gray-500 mt-0.5">{items.length} line items</p>
-            </div>
-            <button
-              onClick={exportCSV}
-              className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 flex items-center gap-1.5 text-sm font-semibold"
-            >
-              <Download className="h-4 w-4" />
-              Export CSV
-            </button>
-          </div>
-
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">
-                  Date
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">
-                  Customer
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">
-                  Product
-                </th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">
-                  Qty
-                </th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">
-                  Unit Price
-                </th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">
-                  Subtotal
-                </th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">
-                  GST
-                </th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">
-                  Total
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {items.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600">
-                    {item.delivery_date}
-                  </td>
-                  <td className="px-4 py-3 text-gray-900">
-                    {item.customer_name}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="font-medium text-gray-900">{item.product_name}</span>
-                    {item.product_code && (
-                      <span className="ml-2 text-xs text-gray-400 font-mono">
-                        #{item.product_code}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-gray-700">
-                    {item.quantity}
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-600">
-                    ${item.unit_price.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                    ${item.subtotal.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-600">
-                    ${item.gst_amount.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-bold text-gray-900">
-                    ${(item.subtotal + item.gst_amount).toFixed(2)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="border-t-2 border-gray-300 bg-gray-50">
-              <tr>
-                <td colSpan={3} className="px-4 py-3 font-bold text-gray-800">
-                  Total
-                </td>
-                <td className="px-4 py-3 text-right font-bold font-mono text-gray-900">
-                  {summary.total_quantity}
-                </td>
-                <td></td>
-                <td className="px-4 py-3 text-right font-bold text-gray-900">
-                  ${(summary.total_revenue - summary.total_gst).toFixed(2)}
-                </td>
-                <td className="px-4 py-3 text-right font-bold text-gray-900">
-                  ${summary.total_gst.toFixed(2)}
-                </td>
-                <td className="px-4 py-3 text-right font-bold text-gray-900">
-                  ${summary.total_revenue.toFixed(2)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
-
-      {items.length === 0 && summary === null && (
-        <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
-          <p className="text-gray-400">Select filters and click Search to view sales history</p>
-        </div>
-      )}
-
+    {/* Results Table - GROUPED */}
+{items.length > 0 && (
+  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+    <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+      <div>
+        <h2 className="font-bold text-gray-800">Sales Summary</h2>
+        <p className="text-xs text-gray-500 mt-0.5">
+          Grouped by {productId && customerId ? 'product' : productId ? 'customer' : 'product'}
+        </p>
+      </div>
+      <button
+        onClick={exportCSV}
+        className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 flex items-center gap-1.5 text-sm font-semibold"
+      >
+        <Download className="h-4 w-4" />
+        Export CSV
+      </button>
     </div>
-  )
-}
+
+    <table className="w-full text-sm">
+      <thead className="bg-gray-50 border-b border-gray-200">
+        <tr>
+          {!productId && (
+            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">
+              Product
+            </th>
+          )}
+          {!customerId && (
+            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">
+              Customer
+            </th>
+          )}
+          <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">
+            Total Qty
+          </th>
+          <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">
+            Avg Price
+          </th>
+          <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">
+            Subtotal
+          </th>
+          <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">
+            GST
+          </th>
+          <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">
+            Total
+          </th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-gray-100">
+        {(() => {
+          // Group by product if customer selected, or by customer if product selected
+          const grouped: Record<string, {
+            key: string
+            label: string
+            qty: number
+            subtotal: number
+            gst: number
+            count: number
+          }> = {}
+
+          for (const item of items) {
+            const key = productId
+              ? item.customer_id + '|' + item.customer_name
+              : item.product_id + '|' + item.product_name + '|' + (item.product_code ?? '')
+
+            if (!grouped[key]) {
+              grouped[key] = {
+                key,
+                label: productId ? item.customer_name : item.product_name,
+                qty: 0,
+                subtotal: 0,
+                gst: 0,
+                count: 0,
+              }
+            }
+
+            grouped[key].qty      += item.quantity
+            grouped[key].subtotal += item.subtotal
+            grouped[key].gst      += item.gst_amount
+            grouped[key].count    += 1
+          }
+
+          const rows = Object.values(grouped).sort((a, b) => b.subtotal - a.subtotal)
+
+          return rows.map((row) => {
+            const total = row.subtotal + row.gst
+            const avgPrice = row.subtotal / row.qty
+
+            return (
+              <tr key={row.key} className="hover:bg-gray-50">
+                {!productId && (
+                  <td className="px-4 py-3 font-medium text-gray-900">
+                    {row.label}
+                    {(() => {
+                      const parts = row.key.split('|')
+                      const code = parts[2]
+                      return code ? (
+                        <span className="ml-2 text-xs text-gray-400 font-mono">
+                          #{code}
+                        </span>
+                      ) : null
+                    })()}
+                  </td>
+                )}
+                {!customerId && (
+                  <td className="px-4 py-3 font-medium text-gray-900">
+                    {row.label}
+                  </td>
+                )}
+                <td className="px-4 py-3 text-right font-mono font-bold text-gray-900">
+                  {row.qty.toFixed(0)}
+                </td>
+                <td className="px-4 py-3 text-right text-gray-600">
+                  ${avgPrice.toFixed(2)}
+                </td>
+                <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                  ${row.subtotal.toFixed(2)}
+                </td>
+                <td className="px-4 py-3 text-right text-gray-600">
+                  ${row.gst.toFixed(2)}
+                </td>
+                <td className="px-4 py-3 text-right font-bold text-gray-900">
+                  ${total.toFixed(2)}
+                </td>
+              </tr>
+            )
+          })
+        })()}
+      </tbody>
+      <tfoot className="border-t-2 border-gray-300 bg-gray-50">
+        <tr>
+          <td
+            colSpan={productId && customerId ? 1 : productId || customerId ? 2 : 1}
+            className="px-4 py-3 font-bold text-gray-800"
+          >
+            Total
+          </td>
+          <td className="px-4 py-3 text-right font-bold font-mono text-gray-900">
+            {summary.total_quantity}
+          </td>
+          <td></td>
+          <td className="px-4 py-3 text-right font-bold text-gray-900">
+            ${(summary.total_revenue - summary.total_gst).toFixed(2)}
+          </td>
+          <td className="px-4 py-3 text-right font-bold text-gray-900">
+            ${summary.total_gst.toFixed(2)}
+          </td>
+          <td className="px-4 py-3 text-right font-bold text-gray-900">
+            ${summary.total_revenue.toFixed(2)}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+)}
