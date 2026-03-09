@@ -130,7 +130,7 @@ export default function BatchInvoiceGenerator({ availableDates }: BatchInvoiceGe
             : <MailX className="h-4 w-4 text-gray-400"  />
           }
           <span className="text-sm font-medium">
-            {sendEmails ? 'Will send invoice emails to customers' : 'Invoice only — no emails'}
+{sendEmails ? 'Invoice with emails' : 'Invoice — no emails'}
           </span>
         </div>
       </div>
