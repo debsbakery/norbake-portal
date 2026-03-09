@@ -17,6 +17,13 @@ export default async function ReportsPage() {
       color: '#006A4E',
     },
     {
+  title: 'Sales History',
+  description: 'Search orders by product and customer',
+  href: '/admin/reports/sales-history',
+  icon: BarChart2,
+  color: '#0369a1',
+},
+    {
       title: 'Stales Analysis',
       description: 'Stale returns by product and customer',
       href: '/admin/reports/stales',
