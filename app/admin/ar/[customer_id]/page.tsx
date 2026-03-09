@@ -101,7 +101,7 @@ async function getCustomerLedger(customerId: string) {
 
     entries.push({
       id:          tx.id,
-      date:        tx.created_at,
+date: tx.due_date || tx.created_at,
       type:        isCredit ? 'credit' : 'invoice',
       description: tx.description || reference,
       debit:       isCredit ? 0 : txAmount,
