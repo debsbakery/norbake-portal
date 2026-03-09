@@ -13,8 +13,7 @@ export default function BatchInvoiceView() {
   const [pendingBatches, setPendingBatches] = useState<PendingBatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
-  const [sendEmails, setSendEmails] = useState(true);
-
+const [sendEmails, setSendEmails] = useState(false)
   useEffect(() => {
     loadPendingOrders();
   }, []);
@@ -109,7 +108,7 @@ export default function BatchInvoiceView() {
                 className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
               />
               <span className="font-medium text-sm">
-                Send invoice emails to customers
+Invoice with emails
               </span>
             </label>
           </div>
