@@ -501,6 +501,29 @@ export default function StandingOrderForm({ customers, products, standingOrder }
                           className="text-red-400 hover:text-red-600">
                           <Trash2 className="h-4 w-4" />
                         </button>
+                                {isEditing && standingOrder && (
+          <button
+            type="button"
+            onClick={async () => {
+              if (!confirm('Delete this standing order? This cannot be undone.')) return
+              setSubmitting(true)
+              try {
+                const res = await fetch(`/api/standing-orders/${standingOrder.id}`, {
+                  method: 'DELETE',
+                })
+                if (!res.ok) throw new Error('Failed to delete')
+                router.push('/admin/standing-orders')
+              } catch (err: any) {
+                setError(err.message)
+                setSubmitting(false)
+              }
+            }}
+            disabled={submitting}
+            className="px-6 py-3 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            Delete
+          </button>
+        )}
                       </td>
                     </tr>
                   )
