@@ -227,7 +227,7 @@ export default function BatchPackingSlipGenerator({ availableDates }: Props) {
         className="w-full py-3 rounded-lg text-white font-semibold transition-opacity
                    disabled:opacity-50 disabled:cursor-not-allowed
                    flex items-center justify-center gap-2"
-        style={{ backgroundColor: '#006A4E' }}
+        style={{ backgroundColor: '#3E1F00' }}
       >
         {isGenerating ? (
           <><Loader2 className="h-4 w-4 animate-spin" />Generating...</>

@@ -94,11 +94,11 @@ export default async function GSTReportPage({
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
-      <Link href="/admin" className="flex items-center gap-1 text-sm mb-4 hover:opacity-80" style={{ color: '#CE1126' }}>
+      <Link href="/admin" className="flex items-center gap-1 text-sm mb-4 hover:opacity-80" style={{ color: '#C4A882' }}>
         <ArrowLeft className="h-4 w-4" /> Back to Admin
       </Link>
 
-      <h1 className="text-2xl font-bold mb-6" style={{ color: '#006A4E' }}>
+      <h1 className="text-2xl font-bold mb-6" style={{ color: '#3E1F00' }}>
         GST Report — BAS
       </h1>
 
@@ -125,7 +125,7 @@ export default async function GSTReportPage({
         <button
           type="submit"
           className="px-4 py-2 text-white text-sm rounded hover:opacity-90"
-          style={{ backgroundColor: '#006A4E' }}
+          style={{ backgroundColor: '#3E1F00' }}
         >
           View
         </button>
@@ -142,7 +142,7 @@ export default async function GSTReportPage({
           </div>
           <div className="flex justify-between items-center py-2 border-b">
             <span className="text-gray-600">GST on Sales (1A)</span>
-            <span className="font-semibold text-lg" style={{ color: '#006A4E' }}>
+            <span className="font-semibold text-lg" style={{ color: '#3E1F00' }}>
               {formatCurrency(invoiceGst)}
             </span>
           </div>
@@ -152,7 +152,7 @@ export default async function GSTReportPage({
           </div>
           <div className="flex justify-between items-center py-3 bg-gray-50 rounded px-3">
             <span className="font-bold text-lg">Net GST Payable</span>
-            <span className="font-bold text-xl" style={{ color: '#CE1126' }}>
+            <span className="font-bold text-xl" style={{ color: '#C4A882' }}>
               {formatCurrency(netGst)}
             </span>
           </div>

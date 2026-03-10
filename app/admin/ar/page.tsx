@@ -55,14 +55,14 @@ export default async function ARSummaryPage() {
       <Link
         href="/admin"
         className="flex items-center gap-1 text-sm mb-4 hover:opacity-80"
-        style={{ color: "#CE1126" }}
+        style={{ color: "#C4A882" }}
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Admin Dashboard
       </Link>
 
       <div className="mb-8">
-        <h1 className="text-3xl font-bold" style={{ color: "#006A4E" }}>
+        <h1 className="text-3xl font-bold" style={{ color: "#3E1F00" }}>
           Accounts Receivable
         </h1>
         <p className="text-gray-600 mt-2">
@@ -77,9 +77,9 @@ export default async function ARSummaryPage() {
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6 mb-8">
-        <div className="bg-white rounded-lg shadow-md p-4 border-l-4" style={{ borderColor: "#006A4E" }}>
+        <div className="bg-white rounded-lg shadow-md p-4 border-l-4" style={{ borderColor: "#3E1F00" }}>
           <p className="text-xs text-gray-600">Current</p>
-          <p className="text-xl font-bold" style={{ color: "#006A4E" }}>
+          <p className="text-xl font-bold" style={{ color: "#3E1F00" }}>
             {formatCurrency(totals.current)}
           </p>
         </div>
@@ -105,9 +105,9 @@ export default async function ARSummaryPage() {
           </p>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md p-4 border-l-4" style={{ borderColor: "#CE1126" }}>
+        <div className="bg-white rounded-lg shadow-md p-4 border-l-4" style={{ borderColor: "#C4A882" }}>
           <p className="text-xs text-gray-600">Over 90 Days</p>
-          <p className="text-xl font-bold" style={{ color: "#CE1126" }}>
+          <p className="text-xl font-bold" style={{ color: "#C4A882" }}>
             {formatCurrency(totals.days_over_90)}
           </p>
         </div>
@@ -187,7 +187,7 @@ export default async function ARSummaryPage() {
                           href={`/admin/ar/${customer.customer_id}`}
                           className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium hover:opacity-80"
                           style={{ 
-                            backgroundColor: hasBalance ? "#006A4E" : "#9CA3AF",
+                            backgroundColor: hasBalance ? "#3E1F00" : "#9CA3AF",
                             color: "white" 
                           }}
                         >

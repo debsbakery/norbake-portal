@@ -141,7 +141,7 @@ export default function RoutesView() {
           <Link
             href="/admin/routes/create"
             className="inline-block mt-4 px-6 py-2 rounded-md text-white font-semibold hover:opacity-90"
-            style={{ backgroundColor: "#006A4E" }}
+            style={{ backgroundColor: "#3E1F00" }}
           >
             + Create Route
           </Link>
@@ -158,7 +158,7 @@ export default function RoutesView() {
               {/* Header */}
               <div
                 className="p-4 rounded-t-lg text-white"
-                style={{ backgroundColor: route.active ? "#006A4E" : "#6B7280" }}
+                style={{ backgroundColor: route.active ? "#3E1F00" : "#6B7280" }}
               >
                 <div className="flex justify-between items-start">
                   <div>
@@ -219,7 +219,7 @@ export default function RoutesView() {
                 <Link
                   href={`/admin/routes/${route.route_number}`}
                   className="flex-1 min-w-[100px] text-center px-3 py-2 rounded-md text-white text-sm font-semibold hover:opacity-90"
-                  style={{ backgroundColor: "#006A4E" }}
+                  style={{ backgroundColor: "#3E1F00" }}
                 >
                   <Edit className="h-4 w-4 inline mr-1" />
                   Edit

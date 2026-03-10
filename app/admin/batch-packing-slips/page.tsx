@@ -29,14 +29,14 @@ export default async function BatchPackingSlipsPage() {
       <Link
         href="/admin"
         className="flex items-center gap-1 text-sm mb-4 hover:opacity-80"
-        style={{ color: "#CE1126" }}
+        style={{ color: "#C4A882" }}
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Admin
       </Link>
 
       <div className="mb-8">
-        <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: "#006A4E" }}>
+        <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: "#3E1F00" }}>
           <Printer className="h-8 w-8" />
           Batch Packing Slips
         </h1>

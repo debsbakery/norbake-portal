@@ -13,7 +13,7 @@ export default async function CreateProductPage() {
       <a
         href="/admin/products"
         className="flex items-center gap-1 text-sm mb-4 hover:opacity-80"
-        style={{ color: "#CE1126" }}
+        style={{ color: "#C4A882" }}
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Products
