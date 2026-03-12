@@ -75,16 +75,16 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<jsPDF> {
   doc.setTextColor(...textColor)
   doc.setFontSize(24)
   doc.setFont('helvetica', 'bold')
-  doc.text(bakery.name, margin + 45, yPos + 12)
+  doc.text(bakery.name, margin + 60, yPos + 12)
 
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
-  doc.text(bakery.email,   margin + 45, yPos + 20)
-  doc.text(bakery.phone,   margin + 45, yPos + 25)
-  doc.text(bakery.address, margin + 45, yPos + 30)
+  doc.text(bakery.email,   margin + 60, yPos + 20)
+  doc.text(bakery.phone,   margin + 60, yPos + 25)
+  doc.text(bakery.address, margin + 60, yPos + 30)
   if (bakery.abn) {
     doc.setFont('helvetica', 'bold')
-    doc.text('ABN: ' + bakery.abn, margin + 45, yPos + 36)
+    doc.text('ABN: ' + bakery.abn, margin + 60, yPos + 36)
   }
 
   // TAX INVOICE title
