@@ -565,7 +565,7 @@ export default function DirectInvoicePage() {
       </a>
 
       <div className="mb-8">
-        <h1 className="text-3xl font-bold flex items-center gap-2" style={{ color: '#006A4E' }}>
+        <h1 className="text-3xl font-bold flex items-center gap-2" style={{ color: '#5343207e' }}>
           <FileText className="h-8 w-8" /> Direct Invoice
         </h1>
         <p className="text-gray-600 mt-1">Create invoices with optional credit lines</p>
@@ -759,14 +759,14 @@ export default function DirectInvoicePage() {
                     )}
                   </div>
 
-                  {/* Quantity */}
+                                   {/* Quantity */}
                   <div className="col-span-1">
                     <input
                       type="number"
-                      min="0.1"
-                      step="0.1"
+                      min="1"
+                      step="1"
                       value={item.quantity}
-                      onChange={e => updateLineItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                      onChange={e => updateLineItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
                       className="w-full border rounded px-2 py-1.5 text-sm"
                     />
                   </div>
@@ -884,7 +884,7 @@ export default function DirectInvoicePage() {
             type="submit"
             disabled={loading || !lineItems.length}
             className="flex items-center gap-2 px-6 py-3 rounded text-white font-semibold hover:opacity-90 disabled:opacity-50"
-            style={{ backgroundColor: '#CE1126' }}
+            style={{ backgroundColor: '#ce11279c' }}
           >
             <DollarSign className="h-5 w-5" />
             {loading ? 'Creating...' : 'Create Invoice'}
