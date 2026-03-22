@@ -189,34 +189,30 @@ export default function OrderPage() {
     }
   };
 
-  // ── Available delivery dates — respects customer cutoff time ─────────────
-  const getAvailableDates = (cutoffTime?: string) => {
-    const dates = []
+const getAvailableDates = (cutoffTime?: string) => {
+  const dates = []
 
-    // Parse cutoff hour from e.g. "14:00:00" → 14, default 2pm
-    const cutoffHour = cutoffTime
-      ? parseInt(cutoffTime.split(':')[0], 10)
-      : 14
+  // Perth is UTC+8 (no daylight saving)
+  const nowUtc = new Date()
+  const nowPerth = new Date(nowUtc.getTime() + 8 * 60 * 60 * 1000)
 
-    // Brisbane time
-    const nowBrisbane = new Date(
-      new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' })
-    )
+  const cutoffHour = cutoffTime
+    ? parseInt(cutoffTime.split(':')[0], 10)
+    : 14
 
-    const todayHour = nowBrisbane.getHours()
+  const todayHour = nowPerth.getUTCHours()
+  const daysToAdd = todayHour < cutoffHour ? 1 : 2
 
-    // Before cutoff → tomorrow available; after cutoff → day after tomorrow
-    const daysToAdd = todayHour < cutoffHour ? 1 : 2
-    let currentDate = addDays(nowBrisbane, daysToAdd)
+  let currentDate = addDays(nowPerth, daysToAdd)
 
-    for (let i = 0; i < 14; i++) {
-      if (currentDate.getDay() !== 0) {
-        dates.push(new Date(currentDate))
-      }
-      currentDate = addDays(currentDate, 1)
+  for (let i = 0; i < 14; i++) {
+    if (currentDate.getUTCDay() !== 0) {
+      dates.push(new Date(currentDate))
     }
-    return dates
+    currentDate = addDays(currentDate, 1)
   }
+  return dates
+}
 
   // ✅ Pass customer cutoff — recalculates when customer loads
   const availableDates = getAvailableDates(
