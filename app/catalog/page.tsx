@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Product, CartItem } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
-import { ShoppingCart, Search, Loader2, Plus, Minus, ArrowLeft, Image as ImageIcon } from "lucide-react";
+import { ShoppingCart, Search, Loader2, Plus, Minus, ArrowLeft, Image as ImageIcon, Star } from "lucide-react";
 
 interface ProductWithPricing extends Product {
   customerPrice?: number;
@@ -27,12 +27,10 @@ export default function CatalogPage() {
   const [showOnlyShadowItems, setShowOnlyShadowItems] = useState(false);
   const [shadowProductIds, setShadowProductIds] = useState<Set<string>>(new Set());
 
-  // Initialize Supabase
   useEffect(() => {
     setSupabase(createClient());
   }, []);
 
-  // Shadow loader
   const loadShadowProductIds = async () => {
     try {
       const res = await fetch("/api/shadow-orders");
@@ -54,7 +52,6 @@ export default function CatalogPage() {
     }
   };
 
-  // Load products and cart
   useEffect(() => {
     if (!supabase) return;
 
@@ -63,7 +60,9 @@ export default function CatalogPage() {
         const { data, error: fetchError } = await supabase
           .from("products")
           .select("*")
-.eq("is_available", true)
+          .eq("is_available", true)
+          .neq("category", "admin");   // ✅ hide admin-only products like 900
+
         if (fetchError) {
           setError(fetchError.message);
           setLoading(false);
@@ -76,8 +75,7 @@ export default function CatalogPage() {
           return;
         }
 
-        // Fetch customer-specific pricing
-const productIds = data.map((p: any) => p.id);
+        const productIds = data.map((p: any) => p.id);
         const pricingRes = await fetch("/api/pricing", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -91,11 +89,12 @@ const productIds = data.map((p: any) => p.id);
         }
 
         const pricingData = await pricingRes.json();
-const productsWithPricing = data.map((product: any) => ({
+        const productsWithPricing = data.map((product: any) => ({
           ...product,
           customerPrice:
-            pricingData.pricing[product.id]?.price ||
-            parseFloat(product.price),
+            pricingData.pricing[product.id]?.price !== undefined
+              ? pricingData.pricing[product.id].price
+              : parseFloat(product.price),
           isContractPrice:
             pricingData.pricing[product.id]?.isContractPrice || false,
           image_url: product.image_url || null,
@@ -109,7 +108,6 @@ const productsWithPricing = data.map((product: any) => ({
       }
     };
 
-    // Load saved cart from localStorage
     const savedCart = localStorage.getItem("cart");
     if (savedCart) {
       try {
@@ -123,10 +121,12 @@ const productsWithPricing = data.map((product: any) => ({
     loadShadowProductIds();
   }, [supabase]);
 
-  const saveCart = (newCart: CartItem[]) => {
-    setCart(newCart);
-    localStorage.setItem("cart", JSON.stringify(newCart));
-  };
+ const saveCart = (newCart: CartItem[]) => {
+  setCart(newCart);
+  localStorage.setItem("cart", JSON.stringify(newCart));
+  // ✅ Notify other components (header cart badge, etc.)
+  window.dispatchEvent(new Event('cart-changed'));
+};
 
   const handleAddToCart = (product: ProductWithPricing, quantity: number) => {
     const existingIndex = cart.findIndex(
@@ -136,7 +136,7 @@ const productsWithPricing = data.map((product: any) => ({
 
     const productForCart = {
       ...product,
-      price: product.customerPrice || product.price,
+      price: product.customerPrice ?? product.price,
     };
 
     if (existingIndex >= 0) {
@@ -182,7 +182,7 @@ const productsWithPricing = data.map((product: any) => ({
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="h-12 w-12 animate-spin" style={{ color: "#C4A882" }} />
+        <Loader2 className="h-12 w-12 animate-spin" style={{ color: "#CE1126" }} />
       </div>
     );
   }
@@ -191,14 +191,14 @@ const productsWithPricing = data.map((product: any) => ({
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="max-w-md bg-white rounded-lg shadow-lg p-8 text-center">
-          <h2 className="text-2xl font-bold mb-2" style={{ color: "#C4A882" }}>
+          <h2 className="text-2xl font-bold mb-2" style={{ color: "#CE1126" }}>
             Error Loading Products
           </h2>
           <p className="text-gray-600 mb-4">{error}</p>
           <button
             onClick={() => window.location.reload()}
             className="px-6 py-2 text-white rounded-md"
-            style={{ backgroundColor: "#C4A882" }}
+            style={{ backgroundColor: "#CE1126" }}
           >
             Try Again
           </button>
@@ -210,13 +210,14 @@ const productsWithPricing = data.map((product: any) => ({
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
+        {/* ✅ Back to Portal (was "Back to Home") */}
         <button
-          onClick={() => router.push("/")}
+          onClick={() => router.push("/portal")}
           className="flex items-center mb-4"
-          style={{ color: "#C4A882" }}
+          style={{ color: "#CE1126" }}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Home
+          Back to Portal
         </button>
 
         {/* Header */}
@@ -242,7 +243,7 @@ const productsWithPricing = data.map((product: any) => ({
                     : "bg-white text-gray-700 border-2"
                 }`}
               >
-                ⭐{" "}
+                <Star className="h-4 w-4 fill-current" />
                 {showOnlyShadowItems
                   ? `Showing My Usual (${filteredProducts.length})`
                   : "Show My Usual"}
@@ -252,7 +253,7 @@ const productsWithPricing = data.map((product: any) => ({
             <button
               onClick={() => router.push("/order")}
               className="relative text-white px-6 py-3 rounded-md font-medium flex items-center gap-2 shadow-md"
-              style={{ backgroundColor: "#C4A882" }}
+              style={{ backgroundColor: "#CE1126" }}
             >
               <ShoppingCart className="h-5 w-5" />
               View Order
@@ -284,7 +285,7 @@ const productsWithPricing = data.map((product: any) => ({
               className={`px-4 py-2 rounded-md font-medium ${
                 !selectedCategory ? "text-white" : "bg-white text-gray-700 border"
               }`}
-              style={!selectedCategory ? { backgroundColor: "#3E1F00" } : {}}
+              style={!selectedCategory ? { backgroundColor: "#006A4E" } : {}}
             >
               All
             </button>
@@ -297,7 +298,7 @@ const productsWithPricing = data.map((product: any) => ({
                     ? "text-white"
                     : "bg-white text-gray-700 border"
                 }`}
-                style={selectedCategory === cat ? { backgroundColor: "#3E1F00" } : {}}
+                style={selectedCategory === cat ? { backgroundColor: "#006A4E" } : {}}
               >
                 {cat}
               </button>
@@ -308,7 +309,7 @@ const productsWithPricing = data.map((product: any) => ({
         {/* Product Grid */}
         {filteredProducts.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg shadow-md">
-            <div className="text-6xl mb-4">🔍</div>
+            <Search className="h-16 w-16 mx-auto text-gray-300 mb-4" />
             <p className="text-xl text-gray-600">No products found</p>
           </div>
         ) : (
@@ -323,6 +324,7 @@ const productsWithPricing = data.map((product: any) => ({
                     ?.quantity || 0
                 }
                 onFavoriteAdded={loadShadowProductIds}
+                isFavorite={shadowProductIds.has(product.id)}
               />
             ))}
           </div>
@@ -332,24 +334,28 @@ const productsWithPricing = data.map((product: any) => ({
   );
 }
 
-// ═══════════════════════════════════════════
-// ProductCard Component
-// ═══════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// ProductCard
+// ─────────────────────────────────────────────────────────────────────────────
+
 function ProductCard({
   product,
   onAddToCart,
   currentQuantity,
   onFavoriteAdded,
+  isFavorite,
 }: {
   product: ProductWithPricing;
   onAddToCart: (product: ProductWithPricing, quantity: number) => void;
   currentQuantity: number;
   onFavoriteAdded?: () => void;
+  isFavorite?: boolean;
 }) {
   const [quantity, setQuantity] = useState(
     currentQuantity || product.min_quantity
   );
   const [imageError, setImageError] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   const handleQuantityChange = (value: number) => {
     const newQuantity = Math.max(
@@ -360,7 +366,7 @@ function ProductCard({
   };
 
   const displayPrice =
-    product.customerPrice || parseFloat(product.price as any);
+    product.customerPrice ?? parseFloat(product.price as any);
 
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow">
@@ -380,11 +386,12 @@ function ProductCard({
               background: "linear-gradient(135deg, #FEE7E9 0%, #E6F5F0 100%)",
             }}
           >
-            {imageError ? (
-              <ImageIcon className="h-16 w-16 text-gray-300" />
-            ) : (
-              <span className="text-6xl">🍞</span>
-            )}
+            <ImageIcon className="h-16 w-16 text-gray-300" />
+          </div>
+        )}
+        {isFavorite && (
+          <div className="absolute top-2 right-2 bg-yellow-400 text-white p-1.5 rounded-full shadow-md">
+            <Star className="h-4 w-4 fill-current" />
           </div>
         )}
       </div>
@@ -395,7 +402,7 @@ function ProductCard({
           {product.category && (
             <span
               className="text-xs px-2 py-1 rounded-full text-white"
-              style={{ backgroundColor: "#3E1F00" }}
+              style={{ backgroundColor: "#006A4E" }}
             >
               {product.category}
             </span>
@@ -411,12 +418,18 @@ function ProductCard({
             className={`text-2xl font-bold ${
               product.isContractPrice ? "text-blue-600" : ""
             }`}
-            style={!product.isContractPrice ? { color: "#C4A882" } : {}}
+            style={!product.isContractPrice ? { color: "#CE1126" } : {}}
           >
             {formatCurrency(displayPrice)}
           </span>
           <span className="text-sm text-gray-500">per {product.unit}</span>
         </div>
+
+        {product.isContractPrice && (
+          <p className="text-xs text-blue-600 font-medium mb-2">
+            Your contract price
+          </p>
+        )}
 
         <p className="text-xs text-gray-500 mb-3">
           Min: {product.min_quantity} | Max: {product.max_quantity}
@@ -425,14 +438,14 @@ function ProductCard({
         <div className="flex gap-2">
           <div
             className="flex items-center border-2 rounded-md"
-            style={{ borderColor: "#3E1F00" }}
+            style={{ borderColor: "#006A4E" }}
           >
             <button
               onClick={() => handleQuantityChange(quantity - 1)}
               disabled={quantity <= product.min_quantity}
               className="p-2 hover:bg-gray-100 disabled:opacity-50"
             >
-              <Minus className="h-4 w-4" style={{ color: "#3E1F00" }} />
+              <Minus className="h-4 w-4" style={{ color: "#006A4E" }} />
             </button>
             <input
               type="number"
@@ -451,17 +464,29 @@ function ProductCard({
               disabled={quantity >= product.max_quantity}
               className="p-2 hover:bg-gray-100 disabled:opacity-50"
             >
-              <Plus className="h-4 w-4" style={{ color: "#3E1F00" }} />
+              <Plus className="h-4 w-4" style={{ color: "#006A4E" }} />
             </button>
           </div>
 
           <button
-            onClick={() => onAddToCart(product, quantity)}
-            className="flex-1 text-white px-4 py-2 rounded-md font-medium flex items-center justify-center gap-2 shadow-md"
-            style={{ backgroundColor: "#C4A882" }}
+            onClick={() => {
+              onAddToCart(product, quantity);
+              setAdding(true);
+              setTimeout(() => setAdding(false), 800);
+            }}
+            className={`flex-1 text-white px-4 py-2 rounded-md font-medium flex items-center justify-center gap-2 shadow-md transition-colors ${
+              adding ? "bg-green-600" : ""
+            }`}
+            style={!adding ? { backgroundColor: "#CE1126" } : {}}
           >
-            <ShoppingCart className="h-4 w-4" />
-            Add
+            {adding ? (
+              <>✓ Added</>
+            ) : (
+              <>
+                <ShoppingCart className="h-4 w-4" />
+                Add
+              </>
+            )}
           </button>
 
           <button
@@ -477,7 +502,7 @@ function ProductCard({
                 });
 
                 if (res.ok) {
-                  alert("⭐ Added to your usual items!");
+                  alert("Added to your usual items!");
                   onFavoriteAdded?.();
                 } else {
                   const error = await res.json();
@@ -488,11 +513,19 @@ function ProductCard({
                 alert("Error adding to usual items");
               }
             }}
-            className="p-2 border-2 rounded-md hover:bg-yellow-50 transition"
+            className={`p-2 border-2 rounded-md transition ${
+              isFavorite
+                ? "bg-yellow-100 hover:bg-yellow-200"
+                : "hover:bg-yellow-50"
+            }`}
             style={{ borderColor: "#FFD700" }}
-            title="Add to usual items"
+            title={isFavorite ? "Already in your usual items" : "Add to usual items"}
           >
-            ⭐
+            <Star
+              className={`h-4 w-4 ${
+                isFavorite ? "text-yellow-500 fill-current" : "text-gray-400"
+              }`}
+            />
           </button>
         </div>
       </div>
