@@ -10,7 +10,7 @@ import { CartItem, Customer } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 import {
   ArrowLeft, Trash2, Plus, Minus, Loader2, Send,
-  Calendar as CalendarIcon,
+  Calendar as CalendarIcon, ShoppingCart, MapPin, Phone, Building, CreditCard,
 } from "lucide-react";
 import { addDays, format } from "date-fns";
 
@@ -48,7 +48,6 @@ export default function OrderPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          // ✅ Try by ID first then email
           const { data: custById } = await supabase
             .from("customers")
             .select("*")
@@ -78,9 +77,10 @@ export default function OrderPage() {
   }, [supabase]);
 
   const saveCart = (newCart: CartItem[]) => {
-    setCart(newCart);
-    localStorage.setItem("cart", JSON.stringify(newCart));
-  };
+  setCart(newCart);
+  localStorage.setItem("cart", JSON.stringify(newCart));
+  window.dispatchEvent(new Event('cart-changed'));
+};
 
   const handleUpdateQuantity = (productId: string, quantity: number) => {
     const newCart = cart.map((item) =>
@@ -110,8 +110,8 @@ export default function OrderPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supabase)        return;
-    if (cart.length === 0)   { setError("Your cart is empty");           return; }
-    if (!deliveryDate)        { setError("Please select a delivery date"); return; }
+    if (cart.length === 0) { setError("Your cart is empty");           return; }
+    if (!deliveryDate)     { setError("Please select a delivery date"); return; }
 
     setLoading(true);
     setError(null);
@@ -174,11 +174,12 @@ export default function OrderPage() {
           }),
         });
       } catch (emailErr) {
-        console.error("⚠️ Email error (non-fatal):", emailErr);
+        console.error("Email error (non-fatal):", emailErr);
       }
 
-      localStorage.removeItem("cart");
-      setCart([]);
+     localStorage.removeItem("cart");
+setCart([]);
+window.dispatchEvent(new Event('cart-changed'));   // notify cart cleared
       window.location.href = `/order/success?id=${order.id}`;
 
     } catch (err: any) {
@@ -189,32 +190,24 @@ export default function OrderPage() {
     }
   };
 
-const getAvailableDates = (cutoffTime?: string) => {
-  const dates = []
+  const getAvailableDates = (cutoffTime?: string) => {
+    const dates = []
+    const nowUtc = new Date()
+    const nowBrisbane = new Date(nowUtc.getTime() + 10 * 60 * 60 * 1000)
+    const cutoffHour = cutoffTime ? parseInt(cutoffTime.split(':')[0], 10) : 14
+    const todayHour = nowBrisbane.getUTCHours()
+    const daysToAdd = todayHour < cutoffHour ? 1 : 2
 
-  // Perth is UTC+8 (no daylight saving)
-  const nowUtc = new Date()
-  const nowPerth = new Date(nowUtc.getTime() + 8 * 60 * 60 * 1000)
-
-  const cutoffHour = cutoffTime
-    ? parseInt(cutoffTime.split(':')[0], 10)
-    : 14
-
-  const todayHour = nowPerth.getUTCHours()
-  const daysToAdd = todayHour < cutoffHour ? 1 : 2
-
-  let currentDate = addDays(nowPerth, daysToAdd)
-
-  for (let i = 0; i < 14; i++) {
-    if (currentDate.getUTCDay() !== 0) {
-      dates.push(new Date(currentDate))
+    let currentDate = addDays(nowBrisbane, daysToAdd)
+    for (let i = 0; i < 14; i++) {
+      if (currentDate.getUTCDay() !== 0) {
+        dates.push(new Date(currentDate))
+      }
+      currentDate = addDays(currentDate, 1)
     }
-    currentDate = addDays(currentDate, 1)
+    return dates
   }
-  return dates
-}
 
-  // ✅ Pass customer cutoff — recalculates when customer loads
   const availableDates = getAvailableDates(
     (customer as any)?.cutoff_time ?? (customer as any)?.default_cutoff_time ?? undefined
   )
@@ -248,7 +241,10 @@ const getAvailableDates = (cutoffTime?: string) => {
             {/* LEFT — Delivery Details */}
             <div className="space-y-6">
               <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-bold mb-4">📅 Delivery Details</h2>
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <CalendarIcon className="h-5 w-5" />
+                  Delivery Details
+                </h2>
 
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -264,11 +260,31 @@ const getAvailableDates = (cutoffTime?: string) => {
                 </div>
 
                 {customer && (
-                  <div className="mb-4 p-3 bg-gray-50 rounded-md text-sm text-gray-600">
-                    {customer.address       && <p>📍 {customer.address}</p>}
-                    {customer.phone         && <p>📞 {customer.phone}</p>}
-                    {customer.abn           && <p>🏢 ABN: {customer.abn}</p>}
-                    {customer.payment_terms && <p>💳 Payment terms: {customer.payment_terms} days</p>}
+                  <div className="mb-4 p-3 bg-gray-50 rounded-md text-sm text-gray-600 space-y-1">
+                    {customer.address && (
+                      <p className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-gray-400" />
+                        {customer.address}
+                      </p>
+                    )}
+                    {customer.phone && (
+                      <p className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-gray-400" />
+                        {customer.phone}
+                      </p>
+                    )}
+                    {customer.abn && (
+                      <p className="flex items-center gap-2">
+                        <Building className="h-4 w-4 text-gray-400" />
+                        ABN: {customer.abn}
+                      </p>
+                    )}
+                    {customer.payment_terms && (
+                      <p className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4 text-gray-400" />
+                        Payment terms: {customer.payment_terms} days
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -364,16 +380,17 @@ const getAvailableDates = (cutoffTime?: string) => {
             {/* RIGHT — Order Summary */}
             <div className="space-y-6">
               <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-bold mb-4">
-                  🛒 Order Summary
-                  <span className="ml-2 text-sm font-normal text-gray-600">
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5" />
+                  Order Summary
+                  <span className="ml-1 text-sm font-normal text-gray-600">
                     ({cart.length} item{cart.length !== 1 ? "s" : ""})
                   </span>
                 </h2>
 
                 {cart.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
-                    <div className="text-4xl mb-2">🛒</div>
+                    <ShoppingCart className="h-12 w-12 mx-auto text-gray-300 mb-2" />
                     <p>Your cart is empty.</p>
                     <Link href="/catalog">
                       <button type="button" className="mt-4 font-medium" style={{ color: "#CE1126" }}>
