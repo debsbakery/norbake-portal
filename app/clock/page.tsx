@@ -262,35 +262,49 @@ function ClockPageContent() {
         </div>
       )}
 
-      {/* ── Done ── */}
-      {step === 'done' && result && (
-        <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm text-center">
-          <div className="text-6xl mb-4">
-            {mode === 'in' ? '✅' : '👋'}
-          </div>
-          <h2 className="text-2xl font-bold mb-1" style={{ color: primary }}>
-            {result.staff_name}
-          </h2>
-          <p className="text-lg font-semibold text-gray-700">
-            {mode === 'in' ? 'Clocked In' : 'Clocked Out'}
-          </p>
-          <p className="text-4xl font-bold mt-3" style={{ color: primary }}>
-            {mode === 'in' ? result.clocked_in : result.clocked_out}
-          </p>
-         {mode === 'out' && Number(result.paid_hours) > 0 && (
-  <p className="text-gray-500 mt-2">
-    {Number(result.paid_hours).toFixed(2)} hours worked today
-  </p>
-)}
-          {result.flags?.length > 0 && (
-            <div className="mt-4 p-2 bg-amber-50 rounded-lg text-xs text-amber-700">
-              ⚠️ {result.flags.join(', ')}
-            </div>
-          )}
-          <p className="text-gray-400 text-xs mt-6">Resetting in a few seconds...</p>
-        </div>
-      )}
+    {/* ── Done ── */}
+{step === 'done' && result && (
+  <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm text-center">
+    <div className="text-6xl mb-4">
+      {mode === 'in' ? '✅' : '👋'}
+    </div>
+    <h2 className="text-2xl font-bold mb-1" style={{ color: primary }}>
+      {result.staff_name}
+    </h2>
+    <p className="text-lg font-semibold text-gray-700">
+      {mode === 'in' ? 'Clocked In' : 'Clocked Out'}
+    </p>
 
+    {/* ✅ Show ACTUAL clock time prominently */}
+    <p className="text-5xl font-bold mt-3" style={{ color: primary }}>
+      {result.raw_time ?? (mode === 'in' ? result.clocked_in : result.clocked_out)}
+    </p>
+
+    {/* If paid time differs, show it as a small note */}
+    {result.is_early_late && result.clocked_in !== result.raw_time && mode === 'in' && (
+      <p className="text-xs text-gray-500 mt-2">
+        Paid from {result.clocked_in}
+      </p>
+    )}
+
+    {/* For clock-out: show hours worked */}
+    {mode === 'out' && Number(result.paid_hours) > 0 && (
+      <p className="text-gray-500 mt-3 text-sm">
+        {Number(result.paid_hours).toFixed(2)} hours worked today
+      </p>
+    )}
+
+    {result.flags?.length > 0 && (
+      <div className="mt-4 p-2 bg-amber-50 rounded-lg text-xs text-amber-700">
+        ⚠️ {result.flags.join(', ')}
+      </div>
+    )}
+
+    <p className="text-gray-400 text-xs mt-6">
+      Resetting in a few seconds...
+    </p>
+  </div>
+)}
       {/* Current time */}
       <div className="mt-8 text-gray-400 text-sm">
         {new Date().toLocaleTimeString('en-AU', {

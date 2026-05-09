@@ -144,17 +144,16 @@ export async function POST(request: NextRequest) {
       .update({ status: 'present' })
       .eq('id', rosterEntry.id)
   }
-
-  return NextResponse.json({
-    success:      true,
-    staff_name:   staff.name,
-    clocked_in:   paidTime.toTimeString().slice(0, 5),
-    snap_reason:  snapReason,
-    trust_score:  trustScore,
-    flags,
-    gps_distance: distanceM,
-    message: `✅ ${staff.name} clocked in at ${paidTime.toTimeString().slice(0, 5)}${
-      scheduledStart ? ` (scheduled ${scheduledStart.toTimeString().slice(0,5)})` : ''
-    }`,
-  })
+return NextResponse.json({
+  success:        true,
+  staff_name:     staff.name,
+  raw_time:       nowBrisbane.toTimeString().slice(0, 5),    // ✅ actual time
+  clocked_in:     paidTime.toTimeString().slice(0, 5),       // paid time (snapped)
+  is_early_late:  paidTime.getTime() !== nowBrisbane.getTime(),
+  snap_reason:    snapReason,
+  trust_score:    trustScore,
+  flags,
+  gps_distance:   distanceM,
+  message: `✅ ${staff.name} clocked in at ${nowBrisbane.toTimeString().slice(0, 5)}`,
+})
 }
