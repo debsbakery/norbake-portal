@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { checkAdmin } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { Users, Plus, Clock, DollarSign } from 'lucide-react'
+import { Users, Plus } from 'lucide-react'
 
 const DEPT_LABELS: Record<string, string> = {
   production: '🍞 Production',
@@ -171,9 +171,9 @@ export default async function StaffPage() {
                     Edit
                   </Link>
                   <Link href={`/admin/staff/${s.id}/hours`}
-                    className="text-green-600 hover:underline text-sm font-medium flex-inline items-center gap-1">
-                    <Clock className="h-3 w-3 inline" /> Hours
-                  </Link>
+  className="text-green-600 hover:underline text-sm font-medium">
+  Hours
+</Link>
                 </td>
               </tr>
             ))}
