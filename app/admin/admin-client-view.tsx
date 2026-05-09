@@ -4,7 +4,7 @@ import { useState } from 'react'
 import {
   Clock, Users, BarChart3, Package, RefreshCw, Truck,
   DollarSign, FileText, ShoppingCart, ChefHat, Receipt,
-  Copy, Play, ClipboardList, Printer, Store, X,
+  Copy, Play, ClipboardList, Printer, Store, X, CalendarDays,
 } from 'lucide-react'
 
 import OrdersView from './orders-view'
@@ -316,6 +316,16 @@ export default function AdminClientView({
                 style={{ backgroundColor: '#ca8a04' }}>
                 <DollarSign className="h-4 w-4" />Cost Settings
               </a>
+              <a href="/admin/staff"
+  className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+  style={{ backgroundColor: '#3E1F00' }}>
+  <Users className="h-4 w-4" />Staff
+</a>
+<a href="/admin/roster"
+  className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+  style={{ backgroundColor: '#3E1F00' }}>
+  <CalendarDays className="h-4 w-4" />Roster
+</a>
               <a href="/admin/products/bulk-codes"
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
                 style={{ backgroundColor: '#4f46e5' }}>
