@@ -51,7 +51,19 @@ export async function POST(request: NextRequest) {
     .maybeSingle()
 
   if (!clockInEvent) {
-    return NextResponse.json({ error: `${staff.name} has not clocked in`, not_in: true }, { status: 409 })
+    // Debug: check what events exist at all
+    const { data: allEvents } = await supabase
+      .from('clock_events')
+      .select('event_type, raw_time')
+      .eq('staff_id', staff.id)
+      .order('raw_time', { ascending: false })
+      .limit(3)
+    return NextResponse.json({
+      error: `${staff.name} has not clocked in`,
+      not_in: true,
+      debug_cutoff: twentyFourHoursAgo.toISOString(),
+      debug_recent_events: allEvents ?? [],
+    }, { status: 409 })
   }
 
   const { data: existingOut } = await supabase
