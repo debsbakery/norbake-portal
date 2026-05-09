@@ -13,12 +13,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'PIN and QR token required' }, { status: 400 })
   }
 
-  const supabase  = createAdminClient()
- const nowUtc   = new Date()
-const today    = nowUtc.toLocaleDateString('en-CA', { timeZone: 'Australia/Perth' })
-const nowLocal = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
+  const supabase = createAdminClient()
+  const nowUtc   = new Date()
+  const today    = nowUtc.toLocaleDateString('en-CA', { timeZone: 'Australia/Perth' })
+  const nowLocal = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
 
-  // ── 1. Validate QR token ──────────────────────────────────────────────────
+  // -- 1. Validate QR token --------------------------------------------------
   const { data: qr } = await supabase
     .from('staff_qr_codes')
     .select('id, location_id, staff_locations(id, name, latitude, longitude, radius_metres)')
@@ -32,7 +32,7 @@ const nowLocal = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'Australia/
 
   const location = qr.staff_locations as any
 
-  // ── 2. Validate PIN ───────────────────────────────────────────────────────
+  // -- 2. Validate PIN -------------------------------------------------------
   const { data: staff } = await supabase
     .from('staff')
     .select('id, name, employment_type, active')
@@ -44,35 +44,33 @@ const nowLocal = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'Australia/
     return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 })
   }
 
-  // ── 3. Check not already clocked in today ─────────────────────────────────
-  const today = nowLocal.toISOString().split('T')[0]
+  // -- 3. Check not already clocked in today ---------------------------------
   const { data: existingIn } = await supabase
     .from('clock_events')
     .select('id, raw_time')
     .eq('staff_id', staff.id)
     .eq('event_type', 'clock_in')
-.gte('raw_time', today + 'T00:00:00+08:00')
+    .gte('raw_time', today + 'T00:00:00+08:00')
     .maybeSingle()
 
   if (existingIn) {
-    // Check if they've also clocked out (split shift — allow second clock-in)
     const { data: existingOut } = await supabase
       .from('clock_events')
       .select('id')
       .eq('staff_id', staff.id)
       .eq('event_type', 'clock_out')
-.gte('raw_time', today + 'T00:00:00+08:00')
+      .gte('raw_time', today + 'T00:00:00+08:00')
       .maybeSingle()
 
     if (!existingOut) {
       return NextResponse.json({
-        error: `${staff.name} is already clocked in today`,
+        error:      `${staff.name} is already clocked in today`,
         already_in: true,
       }, { status: 409 })
     }
   }
 
-  // ── 4. Find today's roster entry ──────────────────────────────────────────
+  // -- 4. Find today roster entry --------------------------------------------
   const { data: rosterEntry } = await supabase
     .from('roster_entries')
     .select('*')
@@ -82,9 +80,9 @@ const nowLocal = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'Australia/
     .order('section', { ascending: true })
     .maybeSingle()
 
-  // ── 5. Compute snap ───────────────────────────────────────────────────────
+  // -- 5. Compute snap -------------------------------------------------------
   const scheduledStart = rosterEntry?.scheduled_start
-    ? new Date(`${today}T${rosterEntry.scheduled_start}:00+10:00`)
+    ? new Date(`${today}T${rosterEntry.scheduled_start}:00+08:00`)
     : null
 
   const { paidTime, snapReason } = computeClockIn({
@@ -93,7 +91,7 @@ const nowLocal = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'Australia/
     employmentType: staff.employment_type,
   })
 
-  // ── 6. GPS trust score ────────────────────────────────────────────────────
+  // -- 6. GPS trust score ----------------------------------------------------
   let distanceM: number | null = null
   let gpsValid  = false
 
@@ -109,18 +107,18 @@ const nowLocal = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'Australia/
   const { score: trustScore, flags } = computeTrustScore({
     gpsValid,
     distanceM,
-    radiusM: Number(location?.radius_metres ?? 200),
-    ipMatchesSite: true,  // simplified — can enhance later
+    radiusM:       Number(location?.radius_metres ?? 200),
+    ipMatchesSite: true,
   })
 
-  // ── 7. Insert clock event ─────────────────────────────────────────────────
+  // -- 7. Insert clock event -------------------------------------------------
   const { data: event, error: evtErr } = await supabase
     .from('clock_events')
     .insert({
       staff_id:        staff.id,
       roster_entry_id: rosterEntry?.id ?? null,
       event_type:      'clock_in',
-      raw_time:        nowLocal.toISOString(),
+      raw_time:        nowUtc.toISOString(),
       paid_time:       paidTime.toISOString(),
       snap_reason:     snapReason,
       gps_lat:         lat   ?? null,
@@ -137,23 +135,30 @@ const nowLocal = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'Australia/
     return NextResponse.json({ error: evtErr.message }, { status: 500 })
   }
 
-  // ── 8. Update roster entry status to 'present' ────────────────────────────
+  // -- 8. Update roster entry status to present ------------------------------
   if (rosterEntry) {
     await supabase
       .from('roster_entries')
       .update({ status: 'present' })
       .eq('id', rosterEntry.id)
   }
-return NextResponse.json({
-  success:        true,
-  staff_name:     staff.name,
-  raw_time:       nowLocal.toTimeString().slice(0, 5),    // ✅ actual time
-  clocked_in:     paidTime.toTimeString().slice(0, 5),       // paid time (snapped)
-  is_early_late:  paidTime.getTime() !== nowLocal.getTime(),
-  snap_reason:    snapReason,
-  trust_score:    trustScore,
-  flags,
-  gps_distance:   distanceM,
-  message: `✅ ${staff.name} clocked in at ${nowLocal.toTimeString().slice(0, 5)}`,
-})
+
+  // -- 9. Return response ----------------------------------------------------
+  const rawTimeStr  = nowLocal.toTimeString().slice(0, 5)
+  const paidTimeStr = new Date(
+    paidTime.toLocaleString('en-US', { timeZone: 'Australia/Perth' })
+  ).toTimeString().slice(0, 5)
+
+  return NextResponse.json({
+    success:       true,
+    staff_name:    staff.name,
+    raw_time:      rawTimeStr,
+    clocked_in:    paidTimeStr,
+    is_early_late: rawTimeStr !== paidTimeStr,
+    snap_reason:   snapReason,
+    trust_score:   trustScore,
+    flags,
+    gps_distance:  distanceM,
+    message: `? ${staff.name} clocked in at ${rawTimeStr}`,
+  })
 }
