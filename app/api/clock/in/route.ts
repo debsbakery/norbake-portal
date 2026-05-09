@@ -14,9 +14,9 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase  = createAdminClient()
-  const nowLocal = new Date(
-    new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' })
-  )
+ const nowUtc   = new Date()
+const today    = nowUtc.toLocaleDateString('en-CA', { timeZone: 'Australia/Perth' })
+const nowLocal = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
 
   // ── 1. Validate QR token ──────────────────────────────────────────────────
   const { data: qr } = await supabase
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     .select('id, raw_time')
     .eq('staff_id', staff.id)
     .eq('event_type', 'clock_in')
-    .gte('raw_time', today + 'T00:00:00+10:00')
+.gte('raw_time', today + 'T00:00:00+08:00')
     .maybeSingle()
 
   if (existingIn) {
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       .select('id')
       .eq('staff_id', staff.id)
       .eq('event_type', 'clock_out')
-      .gte('raw_time', today + 'T00:00:00+10:00')
+.gte('raw_time', today + 'T00:00:00+08:00')
       .maybeSingle()
 
     if (!existingOut) {
