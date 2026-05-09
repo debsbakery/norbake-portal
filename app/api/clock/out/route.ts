@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     .select('id, paid_time, roster_entry_id')
     .eq('staff_id', staff.id)
     .eq('event_type', 'clock_in')
-    .gte('raw_time', today + 'T00:00:00+08:00')
+    .gte('raw_time', new Date(today + 'T00:00:00+08:00').toISOString())
     .order('raw_time', { ascending: false })
     .maybeSingle()
 

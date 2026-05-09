@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     .select('id, raw_time')
     .eq('staff_id', staff.id)
     .eq('event_type', 'clock_in')
-    .gte('raw_time', today + 'T00:00:00+08:00')
+    .gte('raw_time', new Date(today + 'T00:00:00+08:00').toISOString())
     .maybeSingle()
 
   if (existingIn) {
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
       .select('id')
       .eq('staff_id', staff.id)
       .eq('event_type', 'clock_out')
-      .gte('raw_time', today + 'T00:00:00+08:00')
+      .gte('raw_time', new Date(today + 'T00:00:00+08:00').toISOString())
       .maybeSingle()
 
     if (!existingOut) {
