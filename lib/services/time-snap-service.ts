@@ -22,6 +22,9 @@ export function snapTime(date: Date, direction: 'up' | 'down'): Date {
   return result
 }
 
+// ── Late grace period: arrivals up to GRACE_MIN minutes late are not penalised ─
+export const LATE_GRACE_MIN = 4
+
 export function computeClockIn(params: {
   rawTime:        Date
   scheduledStart: Date | null
@@ -45,7 +48,7 @@ export function computeClockIn(params: {
 
   const diffMin = (rawTime.getTime() - scheduledStart.getTime()) / 60000
 
-  // Early or on time — snap TO scheduled start (not rewarded for arriving early)
+  // Early or on time — snap TO scheduled start
   if (diffMin <= 0) {
     return {
       paidTime:   scheduledStart,
@@ -53,14 +56,21 @@ export function computeClockIn(params: {
     }
   }
 
-  // Late — snap UP to next 15min interval
+  // ── ✅ NEW: Within grace period (1-4 min late) — snap to scheduled start ─
+  if (diffMin <= LATE_GRACE_MIN) {
+    return {
+      paidTime:   scheduledStart,
+      snapReason: `late_${Math.round(diffMin)}min_within_grace_paid_from_${fmtT(scheduledStart)}`,
+    }
+  }
+
+  // Late beyond grace — snap UP to next 15min interval
   const paidTime = snapTime(rawTime, 'up')
   return {
     paidTime,
     snapReason: `late_${Math.round(diffMin)}min_rounded_up_to_${fmtT(paidTime)}`,
   }
 }
-
 export function computeClockOut(params: {
   rawTime:        Date
   scheduledEnd:   Date | null

@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase  = createAdminClient()
-  const nowBrisbane = new Date(
+  const nowLocal = new Date(
     new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' })
   )
 
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── 3. Check not already clocked in today ─────────────────────────────────
-  const today = nowBrisbane.toISOString().split('T')[0]
+  const today = nowLocal.toISOString().split('T')[0]
   const { data: existingIn } = await supabase
     .from('clock_events')
     .select('id, raw_time')
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     : null
 
   const { paidTime, snapReason } = computeClockIn({
-    rawTime:        nowBrisbane,
+    rawTime:        nowLocal,
     scheduledStart,
     employmentType: staff.employment_type,
   })
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
       staff_id:        staff.id,
       roster_entry_id: rosterEntry?.id ?? null,
       event_type:      'clock_in',
-      raw_time:        nowBrisbane.toISOString(),
+      raw_time:        nowLocal.toISOString(),
       paid_time:       paidTime.toISOString(),
       snap_reason:     snapReason,
       gps_lat:         lat   ?? null,
@@ -147,13 +147,13 @@ export async function POST(request: NextRequest) {
 return NextResponse.json({
   success:        true,
   staff_name:     staff.name,
-  raw_time:       nowBrisbane.toTimeString().slice(0, 5),    // ✅ actual time
+  raw_time:       nowLocal.toTimeString().slice(0, 5),    // ✅ actual time
   clocked_in:     paidTime.toTimeString().slice(0, 5),       // paid time (snapped)
-  is_early_late:  paidTime.getTime() !== nowBrisbane.getTime(),
+  is_early_late:  paidTime.getTime() !== nowLocal.getTime(),
   snap_reason:    snapReason,
   trust_score:    trustScore,
   flags,
   gps_distance:   distanceM,
-  message: `✅ ${staff.name} clocked in at ${nowBrisbane.toTimeString().slice(0, 5)}`,
+  message: `✅ ${staff.name} clocked in at ${nowLocal.toTimeString().slice(0, 5)}`,
 })
 }

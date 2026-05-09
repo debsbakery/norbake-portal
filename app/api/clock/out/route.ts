@@ -15,10 +15,10 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase    = createAdminClient()
-  const nowBrisbane = new Date(
+  const nowLocal = new Date(
     new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' })
   )
-  const today = nowBrisbane.toISOString().split('T')[0]
+  const today = nowLocal.toISOString().split('T')[0]
 
   // ── 1. Validate QR ────────────────────────────────────────────────────────
   const { data: qr } = await supabase
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
   const paidStart = new Date(clockInEvent.paid_time)
 
   const { paidTime, snapReason } = computeClockOut({
-    rawTime:        nowBrisbane,
+    rawTime:        nowLocal,
     scheduledEnd,
     employmentType: staff.employment_type,
     paidStart,
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
       staff_id:        staff.id,
       roster_entry_id: clockInEvent.roster_entry_id ?? rosterEntry?.id ?? null,
       event_type:      'clock_out',
-      raw_time:        nowBrisbane.toISOString(),
+      raw_time:        nowLocal.toISOString(),
       paid_time:       paidTime.toISOString(),
       snap_reason:     snapReason,
       gps_lat:         lat  ?? null,
