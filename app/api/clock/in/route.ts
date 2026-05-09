@@ -1,8 +1,8 @@
 // app/api/clock/in/route.ts
 export const dynamic = 'force-dynamic'
 
-import { NextRequest, NextResponse }  from 'next/server'
-import { createAdminClient }          from '@/lib/supabase/admin'
+import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { computeClockIn, computeTrustScore, haversineDistanceM } from '@/lib/services/time-snap-service'
 
 export async function POST(request: NextRequest) {
@@ -18,7 +18,6 @@ export async function POST(request: NextRequest) {
   const today    = nowUtc.toLocaleDateString('en-CA', { timeZone: 'Australia/Perth' })
   const nowLocal = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
 
-  // -- 1. Validate QR token --------------------------------------------------
   const { data: qr } = await supabase
     .from('staff_qr_codes')
     .select('id, location_id, staff_locations(id, name, latitude, longitude, radius_metres)')
@@ -26,12 +25,9 @@ export async function POST(request: NextRequest) {
     .eq('active', true)
     .maybeSingle()
 
-  if (!qr) {
-    return NextResponse.json({ error: 'Invalid QR code' }, { status: 401 })
-  }
+  if (!qr) return NextResponse.json({ error: 'Invalid QR code' }, { status: 401 })
   const location = qr.staff_locations as any
 
-  // -- 2. Validate PIN -------------------------------------------------------
   const { data: staff } = await supabase
     .from('staff')
     .select('id, name, employment_type, active')
@@ -39,12 +35,9 @@ export async function POST(request: NextRequest) {
     .eq('active', true)
     .maybeSingle()
 
-  if (!staff) {
-    return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 })
-  }
+  if (!staff) return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 })
 
-  // -- 3. Check not already clocked in (24h lookback) -----------------------
-  const twentyFourHoursAgo = new Date(nowUtc.getTime() - 24 * 60 * 60 * 1000)
+  const twentyFourHoursAgo = new Date(nowUtc.getTime() - 86400000)
 
   const { data: existingIn } = await supabase
     .from('clock_events')
@@ -65,14 +58,10 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (!existingOut) {
-      return NextResponse.json({
-        error:      `${staff.name} is already clocked in`,
-        already_in: true,
-      }, { status: 409 })
+      return NextResponse.json({ error: `${staff.name} is already clocked in`, already_in: true }, { status: 409 })
     }
   }
 
-  // -- 4. Find today roster entry --------------------------------------------
   const { data: rosterEntry } = await supabase
     .from('roster_entries')
     .select('*')
@@ -82,39 +71,32 @@ export async function POST(request: NextRequest) {
     .order('section', { ascending: true })
     .maybeSingle()
 
-  // -- 5. Compute snap -------------------------------------------------------
   const scheduledStart = rosterEntry?.scheduled_start
     ? new Date(`${today}T${rosterEntry.scheduled_start}:00+08:00`)
     : null
 
   const { paidTime, snapReason } = computeClockIn({
-    rawTime:        nowLocal,
+    rawTime: nowLocal,
     scheduledStart,
     employmentType: staff.employment_type,
   })
 
-  // -- 6. GPS trust score ----------------------------------------------------
   let distanceM: number | null = null
-  let gpsValid  = false
+  let gpsValid = false
 
   if (lat && lng && location?.latitude && location?.longitude) {
-    distanceM = Math.round(haversineDistanceM(
-      Number(lat), Number(lng),
-      Number(location.latitude), Number(location.longitude)
-    ))
+    distanceM = Math.round(haversineDistanceM(Number(lat), Number(lng), Number(location.latitude), Number(location.longitude)))
     gpsValid = distanceM <= Number(location.radius_metres ?? 200)
   }
 
   const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0] ?? null
   const { score: trustScore, flags } = computeTrustScore({
-    gpsValid,
-    distanceM,
-    radiusM:       Number(location?.radius_metres ?? 200),
+    gpsValid, distanceM,
+    radiusM: Number(location?.radius_metres ?? 200),
     ipMatchesSite: true,
   })
 
-  // -- 7. Insert clock event -------------------------------------------------
-  const { data: event, error: evtErr } = await supabase
+  const { error: evtErr } = await supabase
     .from('clock_events')
     .insert({
       staff_id:        staff.id,
@@ -123,33 +105,22 @@ export async function POST(request: NextRequest) {
       raw_time:        nowUtc.toISOString(),
       paid_time:       paidTime.toISOString(),
       snap_reason:     snapReason,
-      gps_lat:         lat  ?? null,
-      gps_lng:         lng  ?? null,
+      gps_lat:         lat ?? null,
+      gps_lng:         lng ?? null,
       gps_valid:       gpsValid,
       ip_address:      ipAddress,
       trust_score:     trustScore,
       flags:           flags.length > 0 ? flags : null,
     })
-    .select()
-    .single()
 
-  if (evtErr) {
-    return NextResponse.json({ error: evtErr.message }, { status: 500 })
-  }
+  if (evtErr) return NextResponse.json({ error: evtErr.message }, { status: 500 })
 
-  // -- 8. Update roster status -----------------------------------------------
   if (rosterEntry) {
-    await supabase
-      .from('roster_entries')
-      .update({ status: 'present' })
-      .eq('id', rosterEntry.id)
+    await supabase.from('roster_entries').update({ status: 'present' }).eq('id', rosterEntry.id)
   }
 
-  // -- 9. Return response ----------------------------------------------------
   const rawTimeStr  = nowLocal.toTimeString().slice(0, 5)
-  const paidTimeStr = new Date(
-    paidTime.toLocaleString('en-US', { timeZone: 'Australia/Perth' })
-  ).toTimeString().slice(0, 5)
+  const paidTimeStr = new Date(paidTime.toLocaleString('en-US', { timeZone: 'Australia/Perth' })).toTimeString().slice(0, 5)
 
   return NextResponse.json({
     success:       true,
@@ -161,6 +132,6 @@ export async function POST(request: NextRequest) {
     trust_score:   trustScore,
     flags,
     gps_distance:  distanceM,
-    message:       `? ${staff.name} clocked in at ${rawTimeStr}`,
+    message:       `Clock in at ${rawTimeStr}`,
   })
 }

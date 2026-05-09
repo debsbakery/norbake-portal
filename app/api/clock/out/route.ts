@@ -1,10 +1,10 @@
 // app/api/clock/out/route.ts
 export const dynamic = 'force-dynamic'
 
-import { NextRequest, NextResponse }  from 'next/server'
-import { createAdminClient }          from '@/lib/supabase/admin'
+import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { computeClockOut, computeTrustScore, haversineDistanceM } from '@/lib/services/time-snap-service'
-import { calculateShift }             from '@/lib/services/shift-calculator'
+import { calculateShift } from '@/lib/services/shift-calculator'
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
@@ -19,7 +19,6 @@ export async function POST(request: NextRequest) {
   const today    = nowUtc.toLocaleDateString('en-CA', { timeZone: 'Australia/Perth' })
   const nowLocal = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
 
-  // -- 1. Validate QR --------------------------------------------------------
   const { data: qr } = await supabase
     .from('staff_qr_codes')
     .select('id, location_id, staff_locations(id, name, latitude, longitude, radius_metres)')
@@ -27,12 +26,9 @@ export async function POST(request: NextRequest) {
     .eq('active', true)
     .maybeSingle()
 
-  if (!qr) {
-    return NextResponse.json({ error: 'Invalid QR code' }, { status: 401 })
-  }
+  if (!qr) return NextResponse.json({ error: 'Invalid QR code' }, { status: 401 })
   const location = qr.staff_locations as any
 
-  // -- 2. Validate PIN -------------------------------------------------------
   const { data: staff } = await supabase
     .from('staff')
     .select('id, name, employment_type, active, break_minutes, primary_department')
@@ -40,12 +36,9 @@ export async function POST(request: NextRequest) {
     .eq('active', true)
     .maybeSingle()
 
-  if (!staff) {
-    return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 })
-  }
+  if (!staff) return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 })
 
-  // -- 3. Find most recent clock-in (24h lookback, no timezone math) ---------
-  const twentyFourHoursAgo = new Date(nowUtc.getTime() - 24 * 60 * 60 * 1000)
+  const twentyFourHoursAgo = new Date(nowUtc.getTime() - 86400000)
 
   const { data: clockInEvent } = await supabase
     .from('clock_events')
@@ -58,13 +51,9 @@ export async function POST(request: NextRequest) {
     .maybeSingle()
 
   if (!clockInEvent) {
-    return NextResponse.json({
-      error:  `${staff.name} has not clocked in`,
-      not_in: true,
-    }, { status: 409 })
+    return NextResponse.json({ error: `${staff.name} has not clocked in`, not_in: true }, { status: 409 })
   }
 
-  // -- 4. Check not already clocked out after that clock-in -----------------
   const { data: existingOut } = await supabase
     .from('clock_events')
     .select('id')
@@ -74,21 +63,13 @@ export async function POST(request: NextRequest) {
     .maybeSingle()
 
   if (existingOut) {
-    return NextResponse.json({
-      error:       `${staff.name} has already clocked out`,
-      already_out: true,
-    }, { status: 409 })
+    return NextResponse.json({ error: `${staff.name} has already clocked out`, already_out: true }, { status: 409 })
   }
 
-  // -- 5. Find roster entry --------------------------------------------------
   let rosterEntry: any = null
 
   if (clockInEvent.roster_entry_id) {
-    const { data } = await supabase
-      .from('roster_entries')
-      .select('*')
-      .eq('id', clockInEvent.roster_entry_id)
-      .maybeSingle()
+    const { data } = await supabase.from('roster_entries').select('*').eq('id', clockInEvent.roster_entry_id).maybeSingle()
     rosterEntry = data
   }
 
@@ -104,7 +85,6 @@ export async function POST(request: NextRequest) {
     rosterEntry = data
   }
 
-  // -- 6. Compute clock-out snap ---------------------------------------------
   const scheduledEnd = rosterEntry?.scheduled_end
     ? new Date(`${today}T${rosterEntry.scheduled_end}:00+08:00`)
     : null
@@ -118,26 +98,21 @@ export async function POST(request: NextRequest) {
     paidStart,
   })
 
-  // -- 7. GPS trust score ----------------------------------------------------
   let distanceM: number | null = null
-  let gpsValid  = false
+  let gpsValid = false
 
   if (lat && lng && location?.latitude) {
-    distanceM = Math.round(haversineDistanceM(
-      Number(lat), Number(lng),
-      Number(location.latitude), Number(location.longitude)
-    ))
+    distanceM = Math.round(haversineDistanceM(Number(lat), Number(lng), Number(location.latitude), Number(location.longitude)))
     gpsValid = distanceM <= Number(location.radius_metres ?? 200)
   }
 
   const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0] ?? null
   const { score: trustScore, flags } = computeTrustScore({
     gpsValid, distanceM,
-    radiusM:       Number(location?.radius_metres ?? 200),
+    radiusM: Number(location?.radius_metres ?? 200),
     ipMatchesSite: true,
   })
 
-  // -- 8. Insert clock-out event ---------------------------------------------
   const { data: outEvent, error: evtErr } = await supabase
     .from('clock_events')
     .insert({
@@ -147,8 +122,8 @@ export async function POST(request: NextRequest) {
       raw_time:        nowUtc.toISOString(),
       paid_time:       paidTime.toISOString(),
       snap_reason:     snapReason,
-      gps_lat:         lat  ?? null,
-      gps_lng:         lng  ?? null,
+      gps_lat:         lat ?? null,
+      gps_lng:         lng ?? null,
       gps_valid:       gpsValid,
       ip_address:      ipAddress,
       trust_score:     trustScore,
@@ -159,7 +134,6 @@ export async function POST(request: NextRequest) {
 
   if (evtErr) return NextResponse.json({ error: evtErr.message }, { status: 500 })
 
-  // -- 9. Calculate shift pay ------------------------------------------------
   let calc: ReturnType<typeof calculateShift> | null = null
 
   if (rosterEntry) {
@@ -185,7 +159,6 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  // -- 10. Upsert shift ------------------------------------------------------
   if (calc && rosterEntry) {
     const { error: shiftErr } = await supabase.from('shifts').upsert({
       staff_id:             staff.id,
@@ -222,17 +195,14 @@ export async function POST(request: NextRequest) {
       status:               'pending',
     }, { onConflict: 'staff_id,work_date,section', ignoreDuplicates: false })
 
-    if (shiftErr) console.error('[clock-out] Shift error:', shiftErr.message)
+    if (shiftErr) console.error('[clock-out] shift error:', shiftErr.message)
 
-    await supabase.from('roster_entries')
-      .update({ status: 'completed' })
-      .eq('id', rosterEntry.id)
+    await supabase.from('roster_entries').update({ status: 'completed' }).eq('id', rosterEntry.id)
 
   } else {
     const grossMins  = Math.round((paidTime.getTime() - paidStart.getTime()) / 60000)
     const breakMins  = Number(staff.break_minutes ?? 30)
     const paidMins   = Math.max(0, grossMins - breakMins)
-    const paidHrsRaw = Math.round((paidMins / 60) * 100) / 100
 
     const { error: fallbackErr } = await supabase.from('shifts').upsert({
       staff_id:        staff.id,
@@ -248,23 +218,19 @@ export async function POST(request: NextRequest) {
       gross_minutes:   grossMins,
       break_minutes:   breakMins,
       paid_minutes:    paidMins,
-      paid_hours:      paidHrsRaw,
+      paid_hours:      Math.round((paidMins / 60) * 100) / 100,
       status:          'pending',
     }, { onConflict: 'staff_id,work_date,section', ignoreDuplicates: false })
 
-    if (fallbackErr) console.error('[clock-out] Fallback error:', fallbackErr.message)
+    if (fallbackErr) console.error('[clock-out] fallback error:', fallbackErr.message)
   }
 
-  // -- 11. Response ----------------------------------------------------------
   const paidHours = calc?.paidHours ?? Math.round(
-    Math.max(0, (paidTime.getTime() - paidStart.getTime()) / 60000
-      - Number(staff.break_minutes ?? 30)) / 60 * 100
+    Math.max(0, (paidTime.getTime() - paidStart.getTime()) / 60000 - Number(staff.break_minutes ?? 30)) / 60 * 100
   ) / 100
 
   const rawOutStr = nowLocal.toTimeString().slice(0, 5)
-  const rawInStr  = new Date(
-    new Date(clockInEvent.paid_time).toLocaleString('en-US', { timeZone: 'Australia/Perth' })
-  ).toTimeString().slice(0, 5)
+  const rawInStr  = new Date(new Date(clockInEvent.paid_time).toLocaleString('en-US', { timeZone: 'Australia/Perth' })).toTimeString().slice(0, 5)
 
   return NextResponse.json({
     success:     true,
@@ -277,6 +243,6 @@ export async function POST(request: NextRequest) {
     snap_reason: snapReason,
     trust_score: trustScore,
     flags,
-    message:     `? ${staff.name} clocked out at ${rawOutStr} — ${paidHours.toFixed(2)} hrs`,
+    message:     `Clock out at ${rawOutStr} - ${paidHours.toFixed(2)} hrs`,
   })
 }
