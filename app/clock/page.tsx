@@ -79,11 +79,14 @@ function ClockPageContent() {
           setMode('in')
           setErrorMsg('')
         }, 8000)
-      } else {
-        setErrorMsg(data.error ?? 'Something went wrong')
-        setPin('')
-        if (res.status === 409 && data.already_in) setMode('out')
-      }
+     } else {
+  setErrorMsg(data.error ?? 'Something went wrong')
+  setPin('')   // clear PIN so useEffect doesn't re-fire
+  // Switch mode hint if they need to clock out instead
+  if (res.status === 409 && (data.already_in || data.not_in)) {
+    setMode(prev => prev === 'in' ? 'out' : 'in')
+  }
+}
     } catch (e: any) {
       setErrorMsg(e.message ?? 'Network error')
       setPin('')
@@ -92,13 +95,15 @@ function ClockPageContent() {
     }
   }, [mode, token, gpsCoords, loading])
 
-  // ── Auto-submit when PIN reaches 4 digits ─────────────────────────────────
-  // useEffect watches pin — fires AFTER state has updated (no stale closure)
-  useEffect(() => {
-    if (pin.length === 4 && step === 'pin' && !loading) {
-      doSubmit(pin)
-    }
-  }, [pin])   // eslint-disable-line react-hooks/exhaustive-deps
+ // ── Auto-submit when PIN reaches 4 digits ─────────────────────────────────
+const [submitting, setSubmitting] = useState(false)
+
+useEffect(() => {
+  if (pin.length === 4 && step === 'pin' && !loading && !submitting) {
+    setSubmitting(true)
+    doSubmit(pin).finally(() => setSubmitting(false))
+  }
+}, [pin])  // eslint-disable-line react-hooks/exhaustive-deps
 
   function addDigit(digit: string) {
     if (pin.length < 4 && !loading) {
