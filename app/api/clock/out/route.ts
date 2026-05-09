@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
   const today    = nowUtc.toLocaleDateString('en-CA', { timeZone: 'Australia/Perth' })
   const nowLocal = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
 
-  // ── 1. Validate QR ────────────────────────────────────────────────────────
+  // -- 1. Validate QR --------------------------------------------------------
   const { data: qr } = await supabase
     .from('staff_qr_codes')
     .select('id, location_id, staff_locations(id, name, latitude, longitude, radius_metres)')
@@ -30,10 +30,9 @@ export async function POST(request: NextRequest) {
   if (!qr) {
     return NextResponse.json({ error: 'Invalid QR code' }, { status: 401 })
   }
-
   const location = qr.staff_locations as any
 
-  // ── 2. Validate PIN ───────────────────────────────────────────────────────
+  // -- 2. Validate PIN -------------------------------------------------------
   const { data: staff } = await supabase
     .from('staff')
     .select('id, name, employment_type, active, break_minutes, primary_department')
@@ -45,48 +44,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 })
   }
 
-  // ── 3. Find most recent clock-in (no date filter needed) ─────────────────
-const { data: clockInEvent } = await supabase
-  .from('clock_events')
-  .select('id, paid_time, roster_entry_id')
-  .eq('staff_id', staff.id)
-  .eq('event_type', 'clock_in')
-  .order('raw_time', { ascending: false })
-  .limit(1)
-  .maybeSingle()
+  // -- 3. Find most recent clock-in (24h lookback, no timezone math) ---------
+  const twentyFourHoursAgo = new Date(nowUtc.getTime() - 24 * 60 * 60 * 1000)
 
-if (!clockInEvent) {
-  return NextResponse.json({
-    error:  `${staff.name} has not clocked in`,
-    not_in: true,
-  }, { status: 409 })
-}
+  const { data: clockInEvent } = await supabase
+    .from('clock_events')
+    .select('id, paid_time, roster_entry_id')
+    .eq('staff_id', staff.id)
+    .eq('event_type', 'clock_in')
+    .gte('raw_time', twentyFourHoursAgo.toISOString())
+    .order('raw_time', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
-// Check that clock-in was within last 24 hours (sanity check)
-const hoursSinceClockIn = (nowUtc.getTime() - new Date(clockInEvent.paid_time).getTime()) / 3600000
-if (hoursSinceClockIn > 24) {
-  return NextResponse.json({
-    error:  `${staff.name}'s last clock-in was over 24 hours ago — please contact manager`,
-    not_in: true,
-  }, { status: 409 })
-}
+  if (!clockInEvent) {
+    return NextResponse.json({
+      error:  `${staff.name} has not clocked in`,
+      not_in: true,
+    }, { status: 409 })
+  }
 
-// Check not already clocked out after that clock-in
-const { data: existingOut } = await supabase
-  .from('clock_events')
-  .select('id')
-  .eq('staff_id', staff.id)
-  .eq('event_type', 'clock_out')
-  .gte('raw_time', clockInEvent.paid_time)
-  .maybeSingle()
-
-if (existingOut) {
-  return NextResponse.json({
-    error:       `${staff.name} has already clocked out`,
-    already_out: true,
-  }, { status: 409 })
-}
-  // ── 4. Check not already clocked out since last clock-in ──────────────────
+  // -- 4. Check not already clocked out after that clock-in -----------------
   const { data: existingOut } = await supabase
     .from('clock_events')
     .select('id')
@@ -102,7 +80,7 @@ if (existingOut) {
     }, { status: 409 })
   }
 
-  // ── 5. Find roster entry — ID first, then fallback to staff+date ──────────
+  // -- 5. Find roster entry --------------------------------------------------
   let rosterEntry: any = null
 
   if (clockInEvent.roster_entry_id) {
@@ -126,7 +104,7 @@ if (existingOut) {
     rosterEntry = data
   }
 
-  // ── 6. Compute clock-out snap ─────────────────────────────────────────────
+  // -- 6. Compute clock-out snap ---------------------------------------------
   const scheduledEnd = rosterEntry?.scheduled_end
     ? new Date(`${today}T${rosterEntry.scheduled_end}:00+08:00`)
     : null
@@ -140,7 +118,7 @@ if (existingOut) {
     paidStart,
   })
 
-  // ── 7. GPS trust score ────────────────────────────────────────────────────
+  // -- 7. GPS trust score ----------------------------------------------------
   let distanceM: number | null = null
   let gpsValid  = false
 
@@ -154,13 +132,12 @@ if (existingOut) {
 
   const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0] ?? null
   const { score: trustScore, flags } = computeTrustScore({
-    gpsValid,
-    distanceM,
+    gpsValid, distanceM,
     radiusM:       Number(location?.radius_metres ?? 200),
     ipMatchesSite: true,
   })
 
-  // ── 8. Insert clock-out event ─────────────────────────────────────────────
+  // -- 8. Insert clock-out event ---------------------------------------------
   const { data: outEvent, error: evtErr } = await supabase
     .from('clock_events')
     .insert({
@@ -182,7 +159,7 @@ if (existingOut) {
 
   if (evtErr) return NextResponse.json({ error: evtErr.message }, { status: 500 })
 
-  // ── 9. Calculate shift pay ────────────────────────────────────────────────
+  // -- 9. Calculate shift pay ------------------------------------------------
   let calc: ReturnType<typeof calculateShift> | null = null
 
   if (rosterEntry) {
@@ -208,7 +185,7 @@ if (existingOut) {
     })
   }
 
-  // ── 10. Upsert shift record ───────────────────────────────────────────────
+  // -- 10. Upsert shift ------------------------------------------------------
   if (calc && rosterEntry) {
     const { error: shiftErr } = await supabase.from('shifts').upsert({
       staff_id:             staff.id,
@@ -245,15 +222,13 @@ if (existingOut) {
       status:               'pending',
     }, { onConflict: 'staff_id,work_date,section', ignoreDuplicates: false })
 
-    if (shiftErr) console.error('[clock-out] Shift upsert error:', shiftErr.message)
+    if (shiftErr) console.error('[clock-out] Shift error:', shiftErr.message)
 
-    await supabase
-      .from('roster_entries')
+    await supabase.from('roster_entries')
       .update({ status: 'completed' })
       .eq('id', rosterEntry.id)
 
   } else {
-    // ── Fallback: no roster entry — basic shift ───────────────────────────
     const grossMins  = Math.round((paidTime.getTime() - paidStart.getTime()) / 60000)
     const breakMins  = Number(staff.break_minutes ?? 30)
     const paidMins   = Math.max(0, grossMins - breakMins)
@@ -261,7 +236,6 @@ if (existingOut) {
 
     const { error: fallbackErr } = await supabase.from('shifts').upsert({
       staff_id:        staff.id,
-      roster_entry_id: null,
       work_date:       today,
       section:         1,
       department:      staff.primary_department ?? 'production',
@@ -278,18 +252,15 @@ if (existingOut) {
       status:          'pending',
     }, { onConflict: 'staff_id,work_date,section', ignoreDuplicates: false })
 
-    if (fallbackErr) console.error('[clock-out] Fallback shift error:', fallbackErr.message)
+    if (fallbackErr) console.error('[clock-out] Fallback error:', fallbackErr.message)
   }
 
-  // ── 11. Build response ────────────────────────────────────────────────────
+  // -- 11. Response ----------------------------------------------------------
   const paidHours = calc?.paidHours ?? Math.round(
     Math.max(0, (paidTime.getTime() - paidStart.getTime()) / 60000
       - Number(staff.break_minutes ?? 30)) / 60 * 100
   ) / 100
 
-  const grossPay = calc?.grossPay ?? null
-
-  // Raw Perth time strings for display
   const rawOutStr = nowLocal.toTimeString().slice(0, 5)
   const rawInStr  = new Date(
     new Date(clockInEvent.paid_time).toLocaleString('en-US', { timeZone: 'Australia/Perth' })
@@ -302,10 +273,10 @@ if (existingOut) {
     clocked_in:  rawInStr,
     clocked_out: paidTime.toTimeString().slice(0, 5),
     paid_hours:  paidHours,
-    gross_pay:   grossPay,
+    gross_pay:   calc?.grossPay ?? null,
     snap_reason: snapReason,
     trust_score: trustScore,
     flags,
-    message: `✅ ${staff.name} clocked out at ${rawOutStr} — ${paidHours.toFixed(2)} hrs`,
+    message:     `? ${staff.name} clocked out at ${rawOutStr} � ${paidHours.toFixed(2)} hrs`,
   })
 }
