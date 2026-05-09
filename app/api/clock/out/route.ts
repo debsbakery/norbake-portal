@@ -45,23 +45,47 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 })
   }
 
-  // ── 3. Find today's most recent clock-in ──────────────────────────────────
-  const { data: clockInEvent } = await supabase
-    .from('clock_events')
-    .select('id, paid_time, roster_entry_id')
-    .eq('staff_id', staff.id)
-    .eq('event_type', 'clock_in')
-    .gte('raw_time', new Date(today + 'T00:00:00+08:00').toISOString())
-    .order('raw_time', { ascending: false })
-    .maybeSingle()
+  // ── 3. Find most recent clock-in (no date filter needed) ─────────────────
+const { data: clockInEvent } = await supabase
+  .from('clock_events')
+  .select('id, paid_time, roster_entry_id')
+  .eq('staff_id', staff.id)
+  .eq('event_type', 'clock_in')
+  .order('raw_time', { ascending: false })
+  .limit(1)
+  .maybeSingle()
 
-  if (!clockInEvent) {
-    return NextResponse.json({
-      error:  `${staff.name} has not clocked in today`,
-      not_in: true,
-    }, { status: 409 })
-  }
+if (!clockInEvent) {
+  return NextResponse.json({
+    error:  `${staff.name} has not clocked in`,
+    not_in: true,
+  }, { status: 409 })
+}
 
+// Check that clock-in was within last 24 hours (sanity check)
+const hoursSinceClockIn = (nowUtc.getTime() - new Date(clockInEvent.paid_time).getTime()) / 3600000
+if (hoursSinceClockIn > 24) {
+  return NextResponse.json({
+    error:  `${staff.name}'s last clock-in was over 24 hours ago — please contact manager`,
+    not_in: true,
+  }, { status: 409 })
+}
+
+// Check not already clocked out after that clock-in
+const { data: existingOut } = await supabase
+  .from('clock_events')
+  .select('id')
+  .eq('staff_id', staff.id)
+  .eq('event_type', 'clock_out')
+  .gte('raw_time', clockInEvent.paid_time)
+  .maybeSingle()
+
+if (existingOut) {
+  return NextResponse.json({
+    error:       `${staff.name} has already clocked out`,
+    already_out: true,
+  }, { status: 409 })
+}
   // ── 4. Check not already clocked out since last clock-in ──────────────────
   const { data: existingOut } = await supabase
     .from('clock_events')

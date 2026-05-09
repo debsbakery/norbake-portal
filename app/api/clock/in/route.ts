@@ -1,4 +1,4 @@
-// app/api/clock/in/route.ts
+
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse }  from 'next/server'
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   const today    = nowUtc.toLocaleDateString('en-CA', { timeZone: 'Australia/Perth' })
   const nowLocal = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
 
-  // -- 1. Validate QR token --------------------------------------------------
+  // ── 1. Validate QR token ──────────────────────────────────────────────────
   const { data: qr } = await supabase
     .from('staff_qr_codes')
     .select('id, location_id, staff_locations(id, name, latitude, longitude, radius_metres)')
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
   const location = qr.staff_locations as any
 
-  // -- 2. Validate PIN -------------------------------------------------------
+  // ── 2. Validate PIN ───────────────────────────────────────────────────────
   const { data: staff } = await supabase
     .from('staff')
     .select('id, name, employment_type, active')
@@ -44,33 +44,37 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 })
   }
 
-  // -- 3. Check not already clocked in today ---------------------------------
-  const { data: existingIn } = await supabase
+ // ── 3. Check not already clocked in (look at last 24 hours) ──────────────
+const twentyFourHoursAgo = new Date(nowUtc.getTime() - 24 * 60 * 60 * 1000)
+
+const { data: existingIn } = await supabase
+  .from('clock_events')
+  .select('id, raw_time, paid_time')
+  .eq('staff_id', staff.id)
+  .eq('event_type', 'clock_in')
+  .gte('raw_time', twentyFourHoursAgo.toISOString())
+  .order('raw_time', { ascending: false })
+  .maybeSingle()
+
+if (existingIn) {
+  // Check if there's a clock-out after that specific clock-in
+  const { data: existingOut } = await supabase
     .from('clock_events')
-    .select('id, raw_time')
+    .select('id')
     .eq('staff_id', staff.id)
-    .eq('event_type', 'clock_in')
-    .gte('raw_time', new Date(today + 'T00:00:00+08:00').toISOString())
+    .eq('event_type', 'clock_out')
+    .gte('raw_time', existingIn.paid_time)
     .maybeSingle()
 
-  if (existingIn) {
-    const { data: existingOut } = await supabase
-      .from('clock_events')
-      .select('id')
-      .eq('staff_id', staff.id)
-      .eq('event_type', 'clock_out')
-      .gte('raw_time', new Date(today + 'T00:00:00+08:00').toISOString())
-      .maybeSingle()
-
-    if (!existingOut) {
-      return NextResponse.json({
-        error:      `${staff.name} is already clocked in today`,
-        already_in: true,
-      }, { status: 409 })
-    }
+  if (!existingOut) {
+    return NextResponse.json({
+      error:      `${staff.name} is already clocked in`,
+      already_in: true,
+    }, { status: 409 })
   }
+}
 
-  // -- 4. Find today roster entry --------------------------------------------
+  // ── 4. Find today roster entry ────────────────────────────────────────────
   const { data: rosterEntry } = await supabase
     .from('roster_entries')
     .select('*')
@@ -80,7 +84,7 @@ export async function POST(request: NextRequest) {
     .order('section', { ascending: true })
     .maybeSingle()
 
-  // -- 5. Compute snap -------------------------------------------------------
+  // ── 5. Compute snap ───────────────────────────────────────────────────────
   const scheduledStart = rosterEntry?.scheduled_start
     ? new Date(`${today}T${rosterEntry.scheduled_start}:00+08:00`)
     : null
@@ -91,7 +95,7 @@ export async function POST(request: NextRequest) {
     employmentType: staff.employment_type,
   })
 
-  // -- 6. GPS trust score ----------------------------------------------------
+  // ── 6. GPS trust score ────────────────────────────────────────────────────
   let distanceM: number | null = null
   let gpsValid  = false
 
@@ -111,7 +115,7 @@ export async function POST(request: NextRequest) {
     ipMatchesSite: true,
   })
 
-  // -- 7. Insert clock event -------------------------------------------------
+  // ── 7. Insert clock event ─────────────────────────────────────────────────
   const { data: event, error: evtErr } = await supabase
     .from('clock_events')
     .insert({
@@ -135,7 +139,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: evtErr.message }, { status: 500 })
   }
 
-  // -- 8. Update roster entry status to present ------------------------------
+  // ── 8. Update roster entry status to present ──────────────────────────────
   if (rosterEntry) {
     await supabase
       .from('roster_entries')
@@ -143,7 +147,7 @@ export async function POST(request: NextRequest) {
       .eq('id', rosterEntry.id)
   }
 
-  // -- 9. Return response ----------------------------------------------------
+  // ── 9. Return response ────────────────────────────────────────────────────
   const rawTimeStr  = nowLocal.toTimeString().slice(0, 5)
   const paidTimeStr = new Date(
     paidTime.toLocaleString('en-US', { timeZone: 'Australia/Perth' })
@@ -159,6 +163,6 @@ export async function POST(request: NextRequest) {
     trust_score:   trustScore,
     flags,
     gps_distance:  distanceM,
-    message: `? ${staff.name} clocked in at ${rawTimeStr}`,
+    message: `✅ ${staff.name} clocked in at ${rawTimeStr}`,
   })
 }
