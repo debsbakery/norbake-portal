@@ -5,13 +5,13 @@ import { redirect } from 'next/navigation'
 import { checkAdmin } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
 import StaffForm from '../components/staff-form'
 
 interface Props { params: { id: string } }
 
 export default async function EditStaffPage({ params }: Props) {
-  if (!(await checkAdmin())) redirect('/')
+  const isAdmin = await checkAdmin()
+  if (!isAdmin) redirect('/')
 
   const supabase = createAdminClient()
   const { data: staff } = await supabase
@@ -30,18 +30,19 @@ export default async function EditStaffPage({ params }: Props) {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <Link href="/admin/staff"
-        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 mb-6">
-        <ArrowLeft className="h-4 w-4" /> Back to Staff
+      <Link
+        href="/admin/staff"
+        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 mb-6"
+      >
+        ← Back to Staff
       </Link>
       <h1 className="text-3xl font-bold mb-6">Edit — {staff.name}</h1>
 
       <StaffForm staff={staff} isEditing />
 
-      {/* Pay rate history */}
       {history && history.length > 0 && (
         <div className="mt-8 bg-white rounded-xl shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">📋 Pay Rate History</h2>
+          <h2 className="text-lg font-semibold mb-4">Pay Rate History</h2>
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -71,9 +72,13 @@ export default async function EditStaffPage({ params }: Props) {
                         : '—'}
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-amber-700">
-                    {h.true_hourly_cost ? `$${Number(h.true_hourly_cost).toFixed(2)}/hr` : '—'}
+                    {h.true_hourly_cost
+                      ? `$${Number(h.true_hourly_cost).toFixed(2)}/hr`
+                      : '—'}
                   </td>
-                  <td className="px-3 py-2 text-gray-500 text-xs">{h.change_reason ?? '—'}</td>
+                  <td className="px-3 py-2 text-gray-500 text-xs">
+                    {h.change_reason ?? '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>
