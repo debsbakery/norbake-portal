@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import { redirect } from 'next/navigation'
 import { checkAdmin } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import QRDisplay from './qr-display'
+import QRDisplayClient from './QRDisplayClient'
 
 export default async function ClockQRPage() {
   if (!(await checkAdmin())) redirect('/')
@@ -28,10 +28,10 @@ export default async function ClockQRPage() {
         </a>
       </div>
       <p className="text-gray-500 mb-6 text-sm">
-        Print and mount this QR code at each bakery location.
-        Staff scan it to clock in and out. Refresh the code if it's been compromised.
+        Print and mount this QR code at the bakery. Staff scan it to clock in and out.
+        Click Refresh Code if the QR is compromised.
       </p>
-      <QRDisplay locations={locations ?? []} />
+      <QRDisplayClient locations={locations ?? []} />
     </div>
   )
 }
