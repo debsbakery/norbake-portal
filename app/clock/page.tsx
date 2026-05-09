@@ -277,14 +277,11 @@ function ClockPageContent() {
           <p className="text-4xl font-bold mt-3" style={{ color: primary }}>
             {mode === 'in' ? result.clocked_in : result.clocked_out}
           </p>
-          {mode === 'out' && Number(result.paid_hours) > 0 && (
-            <p className="text-gray-500 mt-2">
-              {Number(result.paid_hours).toFixed(2)} hrs paid
-              {result.gross_pay !== null && result.gross_pay !== undefined
-                ? ` • $${Number(result.gross_pay).toFixed(2)}`
-                : ''}
-            </p>
-          )}
+         {mode === 'out' && Number(result.paid_hours) > 0 && (
+  <p className="text-gray-500 mt-2">
+    {Number(result.paid_hours).toFixed(2)} hours worked today
+  </p>
+)}
           {result.flags?.length > 0 && (
             <div className="mt-4 p-2 bg-amber-50 rounded-lg text-xs text-amber-700">
               ⚠️ {result.flags.join(', ')}
