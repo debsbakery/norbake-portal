@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
 
   const supabase  = createAdminClient()
   const nowBrisbane = new Date(
-    new Date().toLocaleString('en-US', { timeZone: 'Australia/Brisbane' })
+    new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' })
   )
 
   // ── 1. Validate QR token ──────────────────────────────────────────────────

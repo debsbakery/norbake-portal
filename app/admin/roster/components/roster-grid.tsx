@@ -322,7 +322,7 @@ export default function RosterGrid({
               </th>
               {weekDates.map((date, i) => {
                 const isToday = date === new Date(
-                  new Date().toLocaleString('en-US', { timeZone: 'Australia/Brisbane' })
+                  new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' })
                 ).toISOString().split('T')[0]
                 const cost = dayTotalCost(date)
                 return (
@@ -371,7 +371,7 @@ export default function RosterGrid({
                   const isOff   = !entry || entry.status === 'rostered_off' || entry.day_type === 'rostered_off'
                   const isPH    = entry?.day_type === 'public_holiday'
                   const isToday = date === new Date(
-                    new Date().toLocaleString('en-US', { timeZone: 'Australia/Brisbane' })
+                    new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' })
                   ).toISOString().split('T')[0]
 
                   return (

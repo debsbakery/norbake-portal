@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
     // 🆕 Use Australia time so server (UTC) doesn't get the wrong day
     const ausNow = new Date(
-      new Date().toLocaleString('en-US', { timeZone: 'Australia/Brisbane' })
+      new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' })
     );
     const todayStr = ausNow.toISOString().split('T')[0];
 
@@ -295,7 +295,7 @@ function getNextWeekDeliveryDate(deliveryDay: string): Date {
 
   // Brisbane time so we don't get UTC-shifted into wrong day
   const ausNow = new Date(
-    new Date().toLocaleString('en-US', { timeZone: 'Australia/Brisbane' })
+    new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' })
   );
   const currentIndex = ausNow.getDay();
 

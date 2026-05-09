@@ -8,7 +8,7 @@ import RosterGrid from './components/roster-grid'
 
 function getPreviousSunday(offset = 0): string {
   const brisbane = new Date(
-    new Date().toLocaleString('en-US', { timeZone: 'Australia/Brisbane' })
+    new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' })
   )
   brisbane.setHours(0, 0, 0, 0)
   const day = brisbane.getDay()

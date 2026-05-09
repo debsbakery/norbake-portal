@@ -70,7 +70,7 @@ export async function POST(request: Request) {
 
     // ── Tomorrow in Brisbane time ─────────────────────────────────────────
     const nowBrisbane = new Date(
-      new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' })
+      new Date().toLocaleString('en-AU', { timeZone: 'Australia/Perth' })
     )
     nowBrisbane.setDate(nowBrisbane.getDate() + 1)
     const deliveryDate = nowBrisbane.toISOString().split('T')[0]

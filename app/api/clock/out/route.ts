@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
   const supabase    = createAdminClient()
   const nowBrisbane = new Date(
-    new Date().toLocaleString('en-US', { timeZone: 'Australia/Brisbane' })
+    new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' })
   )
   const today = nowBrisbane.toISOString().split('T')[0]
 

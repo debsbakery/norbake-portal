@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   // ── Brisbane-aware: is today actually Sunday? ─────────────────────────────
   const now       = new Date()
-  const brisbane  = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Brisbane' }))
+  const brisbane  = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
   const dayOfWeek = brisbane.getDay() // 0 = Sunday
 
   if (dayOfWeek !== 0) {

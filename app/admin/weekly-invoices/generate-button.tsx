@@ -19,7 +19,7 @@ export default function GenerateWeeklyButton({ customers }: { customers: Custome
   const [error,      setError]      = useState<string | null>(null)
 
   function handleOpen() {
-    const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Brisbane' }))
+    const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
     const day     = now.getDay()
     const thisSun = new Date(now)
     thisSun.setDate(now.getDate() - day)

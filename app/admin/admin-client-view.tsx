@@ -4,13 +4,12 @@ import { useState } from 'react'
 import {
   Clock, Users, BarChart3, Package, RefreshCw, Truck,
   DollarSign, FileText, ShoppingCart, ChefHat, Receipt,
-  Copy, Play, ClipboardList, Printer, Store, X, CalendarDays,
+  Copy, Play, ClipboardList, Printer,QrCode, Store, X, CalendarDays,
 } from 'lucide-react'
 
 import OrdersView from './orders-view'
 import ContractPricingPage from './pricing/page'
 import ProductsView from './products-view'
-
 type Tab = 'orders' | 'standing-orders' | 'pricing' | 'products'
 
 const ALL_DAYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday']
@@ -325,6 +324,11 @@ export default function AdminClientView({
   className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
   style={{ backgroundColor: '#3E1F00' }}>
   <CalendarDays className="h-4 w-4" />Roster
+</a>
+<a href="/admin/staff/clock-qr"
+  className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+  style={{ backgroundColor: '#3E1F00' }}>
+  <QrCode className="h-4 w-4" />Clock QR
 </a>
               <a href="/admin/products/bulk-codes"
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"

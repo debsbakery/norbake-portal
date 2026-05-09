@@ -294,7 +294,7 @@ function ClockPageContent() {
       {/* Current time */}
       <div className="mt-8 text-gray-400 text-sm">
         {new Date().toLocaleTimeString('en-AU', {
-          timeZone: 'Australia/Brisbane',
+          timeZone: 'Australia/Perth',
           hour:     '2-digit',
           minute:   '2-digit',
         })}

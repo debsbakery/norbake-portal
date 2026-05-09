@@ -27,7 +27,7 @@ export interface WeeklyInvoiceResult {
 export function getPreviousWeekRange(anchor: Date = new Date()): { start: string; end: string } {
   // Convert to Brisbane time so we get the right "today"
   const brisbane = new Date(
-    anchor.toLocaleString('en-US', { timeZone: 'Australia/Brisbane' })
+    anchor.toLocaleString('en-US', { timeZone: 'Australia/Perth' })
   )
   brisbane.setHours(0, 0, 0, 0)
 
