@@ -166,14 +166,12 @@ export default async function StaffPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
-                  <Link href={`/admin/staff/${s.id}`}
-                    className="text-blue-600 hover:underline text-sm font-medium mr-3">
-                    Edit
-                  </Link>
-                  <Link href={`/admin/staff/${s.id}/hours`}
-  className="text-green-600 hover:underline text-sm font-medium">
+               <span className="text-gray-300 text-sm ml-2" title="Hours — coming soon">
   Hours
-</Link>
+</span>
+                       <span className="text-gray-300 text-sm cursor-not-allowed ml-1" title="Hours — Stage 4">
+                    Hours
+                  </span>
                 </td>
               </tr>
             ))}
