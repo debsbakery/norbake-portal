@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
   // ── 2. Validate PIN ───────────────────────────────────────────────────────
   const { data: staff } = await supabase
     .from('staff')
-    .select('id, name, employment_type, active')
+    .select('id, name, employment_type, active, break_minutes, primary_department')
     .eq('pin', String(pin))
     .eq('active', true)
     .maybeSingle()
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 })
   }
 
-  // ── 3. Find today's clock-in ──────────────────────────────────────────────
+  // ── 3. Find today's most recent clock-in ──────────────────────────────────
   const { data: clockInEvent } = await supabase
     .from('clock_events')
     .select('id, paid_time, roster_entry_id')
@@ -58,12 +58,12 @@ export async function POST(request: NextRequest) {
 
   if (!clockInEvent) {
     return NextResponse.json({
-      error: `${staff.name} has not clocked in today`,
+      error:  `${staff.name} has not clocked in today`,
       not_in: true,
     }, { status: 409 })
   }
 
-  // ── 4. Check not already clocked out after last clock-in ─────────────────
+  // ── 4. Check not already clocked out since last clock-in ──────────────────
   const { data: existingOut } = await supabase
     .from('clock_events')
     .select('id')
@@ -74,25 +74,43 @@ export async function POST(request: NextRequest) {
 
   if (existingOut) {
     return NextResponse.json({
-      error: `${staff.name} has already clocked out`,
+      error:       `${staff.name} has already clocked out`,
       already_out: true,
     }, { status: 409 })
   }
 
-  // ── 5. Find roster entry for snap logic ───────────────────────────────────
-  const { data: rosterEntry } = await supabase
-    .from('roster_entries')
-    .select('*')
-    .eq('id', clockInEvent.roster_entry_id ?? '')
-    .maybeSingle()
+  // ── 5. Find roster entry — ID first, then fallback to staff+date ──────────
+  let rosterEntry: any = null
 
+  if (clockInEvent.roster_entry_id) {
+    const { data } = await supabase
+      .from('roster_entries')
+      .select('*')
+      .eq('id', clockInEvent.roster_entry_id)
+      .maybeSingle()
+    rosterEntry = data
+  }
+
+  // Fallback: look up by staff_id + today (handles ad-hoc clock-ins)
+  if (!rosterEntry) {
+    const { data } = await supabase
+      .from('roster_entries')
+      .select('*')
+      .eq('staff_id', staff.id)
+      .eq('work_date', today)
+      .neq('status', 'rostered_off')
+      .order('section', { ascending: true })
+      .maybeSingle()
+    rosterEntry = data
+  }
+
+  // ── 6. Compute snap ───────────────────────────────────────────────────────
   const scheduledEnd = rosterEntry?.scheduled_end
     ? new Date(`${today}T${rosterEntry.scheduled_end}:00+10:00`)
     : null
 
   const paidStart = new Date(clockInEvent.paid_time)
 
-  // ── 6. Compute snap ───────────────────────────────────────────────────────
   const { paidTime, snapReason } = computeClockOut({
     rawTime:        nowBrisbane,
     scheduledEnd,
@@ -112,8 +130,9 @@ export async function POST(request: NextRequest) {
   }
   const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0] ?? null
   const { score: trustScore, flags } = computeTrustScore({
-    gpsValid, distanceM,
-    radiusM: Number(location?.radius_metres ?? 200),
+    gpsValid,
+    distanceM,
+    radiusM:       Number(location?.radius_metres ?? 200),
     ipMatchesSite: true,
   })
 
@@ -122,7 +141,7 @@ export async function POST(request: NextRequest) {
     .from('clock_events')
     .insert({
       staff_id:        staff.id,
-      roster_entry_id: clockInEvent.roster_entry_id ?? null,
+      roster_entry_id: clockInEvent.roster_entry_id ?? rosterEntry?.id ?? null,
       event_type:      'clock_out',
       raw_time:        nowBrisbane.toISOString(),
       paid_time:       paidTime.toISOString(),
@@ -140,94 +159,127 @@ export async function POST(request: NextRequest) {
   if (evtErr) return NextResponse.json({ error: evtErr.message }, { status: 500 })
 
   // ── 9. Calculate shift pay ────────────────────────────────────────────────
-  const calc = rosterEntry ? calculateShift({
-    effectiveStart:           paidStart,
-    effectiveEnd:             paidTime,
-    breakMinutes:             Number(rosterEntry.break_minutes ?? 30),
-    employmentType:           staff.employment_type,
-    dayType:                  rosterEntry.day_type ?? 'normal',
-    baseHourlyRate:           rosterEntry.base_hourly_rate,
-    saturdayRate:             rosterEntry.saturday_rate,
-    sundayRate:               rosterEntry.sunday_rate,
-    publicHolidayRate:        rosterEntry.public_holiday_rate,
-    publicHolidayMultiplier:  rosterEntry.public_holiday_multiplier,
-    overtimeThresholdHours:   rosterEntry.overtime_threshold_hours,
-    overtimeMultiplier:       rosterEntry.overtime_multiplier,
-    doubleTimeThresholdHours: rosterEntry.double_time_threshold_hours,
-    doubleTimeMultiplier:     rosterEntry.double_time_multiplier,
-    salaryWeekly:             rosterEntry.salary_weekly,
-    salaryHoursPerWeek:       rosterEntry.salary_hours_per_week,
-    superRatePercent:         rosterEntry.super_rate_percent,
-    trueHourlyCost:           rosterEntry.true_hourly_cost,
-  }) : null
+  let calc: ReturnType<typeof calculateShift> | null = null
+
+  if (rosterEntry) {
+    calc = calculateShift({
+      effectiveStart:           paidStart,
+      effectiveEnd:             paidTime,
+      breakMinutes:             Number(rosterEntry.break_minutes ?? staff.break_minutes ?? 30),
+      employmentType:           staff.employment_type,
+      dayType:                  rosterEntry.day_type ?? 'normal',
+      baseHourlyRate:           rosterEntry.base_hourly_rate,
+      saturdayRate:             rosterEntry.saturday_rate,
+      sundayRate:               rosterEntry.sunday_rate,
+      publicHolidayRate:        rosterEntry.public_holiday_rate,
+      publicHolidayMultiplier:  rosterEntry.public_holiday_multiplier,
+      overtimeThresholdHours:   rosterEntry.overtime_threshold_hours,
+      overtimeMultiplier:       rosterEntry.overtime_multiplier,
+      doubleTimeThresholdHours: rosterEntry.double_time_threshold_hours,
+      doubleTimeMultiplier:     rosterEntry.double_time_multiplier,
+      salaryWeekly:             rosterEntry.salary_weekly,
+      salaryHoursPerWeek:       rosterEntry.salary_hours_per_week,
+      superRatePercent:         rosterEntry.super_rate_percent,
+      trueHourlyCost:           rosterEntry.true_hourly_cost,
+    })
+  }
 
   // ── 10. Upsert shift record ───────────────────────────────────────────────
   if (calc && rosterEntry) {
-    await supabase.from('shifts').upsert({
-      staff_id:         staff.id,
-      roster_entry_id:  rosterEntry.id,
-      work_date:        today,
-      section:          rosterEntry.section ?? 1,
-      department:       rosterEntry.department,
-      employment_type:  staff.employment_type,
-      day_type:         rosterEntry.day_type ?? 'normal',
-      clock_in_id:      clockInEvent.id,
-      clock_out_id:     outEvent.id,
-      effective_start:  paidStart.toISOString(),
-      effective_end:    paidTime.toISOString(),
-      gross_minutes:    calc.grossMinutes,
-      break_minutes:    calc.breakMinutes,
-      paid_minutes:     calc.paidMinutes,
-      paid_hours:       calc.paidHours,
-      applicable_rate:  calc.applicableRate,
-      standard_hours:   calc.standardHours,
-      standard_pay:     calc.standardPay,
-      overtime_hours:   calc.overtimeHours,
-      overtime_rate:    calc.overtimeRate,
-      overtime_pay:     calc.overtimePay,
-      double_time_hours: calc.doubleTimeHours,
-      double_time_rate:  calc.doubleTimeRate,
-      double_time_pay:   calc.doubleTimePay,
-      gross_pay:         calc.grossPay,
-      super_amount:      calc.superAmount,
-      leave_loading_amount: calc.leaveLoadingAmount,
-      true_shift_cost:   calc.trueShiftCost,
-      true_hourly_cost:  rosterEntry.true_hourly_cost,
-      is_salary:         calc.isSalary,
-      salary_daily_cost: calc.salaryDailyCost,
-      status:            'pending',
-    }, { onConflict: 'staff_id,work_date,section' })
+    const { error: shiftErr } = await supabase.from('shifts').upsert({
+      staff_id:              staff.id,
+      roster_entry_id:       rosterEntry.id,
+      work_date:             today,
+      section:               rosterEntry.section ?? 1,
+      department:            rosterEntry.department ?? staff.primary_department,
+      employment_type:       staff.employment_type,
+      day_type:              rosterEntry.day_type ?? 'normal',
+      clock_in_id:           clockInEvent.id,
+      clock_out_id:          outEvent.id,
+      effective_start:       paidStart.toISOString(),
+      effective_end:         paidTime.toISOString(),
+      gross_minutes:         calc.grossMinutes,
+      break_minutes:         calc.breakMinutes,
+      paid_minutes:          calc.paidMinutes,
+      paid_hours:            calc.paidHours,
+      applicable_rate:       calc.applicableRate,
+      standard_hours:        calc.standardHours,
+      standard_pay:          calc.standardPay,
+      overtime_hours:        calc.overtimeHours,
+      overtime_rate:         calc.overtimeRate,
+      overtime_pay:          calc.overtimePay,
+      double_time_hours:     calc.doubleTimeHours,
+      double_time_rate:      calc.doubleTimeRate,
+      double_time_pay:       calc.doubleTimePay,
+      gross_pay:             calc.grossPay,
+      super_amount:          calc.superAmount,
+      leave_loading_amount:  calc.leaveLoadingAmount,
+      true_shift_cost:       calc.trueShiftCost,
+      true_hourly_cost:      rosterEntry.true_hourly_cost,
+      is_salary:             calc.isSalary,
+      salary_daily_cost:     calc.salaryDailyCost,
+      status:                'pending',
+    }, { onConflict: 'staff_id,work_date,section', ignoreDuplicates: false })
 
-    // Update roster status to 'completed'
-    await supabase.from('roster_entries')
+    if (shiftErr) console.error('[clock-out] Shift upsert error:', shiftErr.message)
+
+    // Update roster status to completed
+    await supabase
+      .from('roster_entries')
       .update({ status: 'completed' })
       .eq('id', rosterEntry.id)
 
-    // Update customer balance (only for hourly)
-    if (!calc.isSalary) {
-      const { data: customer } = await supabase
-        .from('staff')
-        .select('id')
-        .eq('id', staff.id)
-        .single()
-    }
+  } else {
+    // ── Fallback: basic shift with no roster entry ────────────────────────
+    const grossMins  = Math.round((paidTime.getTime() - paidStart.getTime()) / 60000)
+    const breakMins  = Number(staff.break_minutes ?? 30)
+    const paidMins   = Math.max(0, grossMins - breakMins)
+    const paidHrsRaw = Math.round((paidMins / 60) * 100) / 100
+
+    const { error: fallbackErr } = await supabase.from('shifts').upsert({
+      staff_id:        staff.id,
+      roster_entry_id: null,
+      work_date:       today,
+      section:         1,
+      department:      staff.primary_department ?? 'production',
+      employment_type: staff.employment_type,
+      day_type:        'normal',
+      clock_in_id:     clockInEvent.id,
+      clock_out_id:    outEvent.id,
+      effective_start: paidStart.toISOString(),
+      effective_end:   paidTime.toISOString(),
+      gross_minutes:   grossMins,
+      break_minutes:   breakMins,
+      paid_minutes:    paidMins,
+      paid_hours:      paidHrsRaw,
+      status:          'pending',
+    }, { onConflict: 'staff_id,work_date,section', ignoreDuplicates: false })
+
+    if (fallbackErr) console.error('[clock-out] Fallback shift error:', fallbackErr.message)
   }
 
-  const paidHours = calc?.paidHours ?? 0
-  const grossPay  = calc?.grossPay  ?? null
+  // ── 11. Return response ───────────────────────────────────────────────────
+  const paidHours = calc?.paidHours
+    ?? Math.round(
+        Math.max(0, (paidTime.getTime() - paidStart.getTime()) / 60000
+          - Number(staff.break_minutes ?? 30))
+        / 60 * 100
+      ) / 100
+
+  const grossPay = calc?.grossPay ?? null
 
   return NextResponse.json({
     success:     true,
     staff_name:  staff.name,
-    clocked_out: paidTime.toTimeString().slice(0, 5),
     clocked_in:  paidStart.toTimeString().slice(0, 5),
+    clocked_out: paidTime.toTimeString().slice(0, 5),
     paid_hours:  paidHours,
     gross_pay:   grossPay,
     snap_reason: snapReason,
     trust_score: trustScore,
     flags,
-    message: `✅ ${staff.name} clocked out at ${paidTime.toTimeString().slice(0,5)} — ${paidHours.toFixed(2)} hrs${
-      grossPay !== null ? ` ($${grossPay.toFixed(2)})` : ''
-    }`,
+    message: `✅ ${staff.name} clocked out at ${paidTime.toTimeString().slice(0, 5)} — ${
+      paidHours.toFixed(2)
+    } hrs paid${grossPay !== null ? ` ($${Number(grossPay).toFixed(2)})` : ''}`,
   })
 }
