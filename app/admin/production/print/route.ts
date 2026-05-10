@@ -15,7 +15,7 @@ async function checkAdmin() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return false;
-    const adminEmails = ['debs_bakery@outlook.com', 'admin@allstarsbakery.com'];
+    const adminEmails = ['orders@norbakebroome.com', 'admin@allstarsbakery.com'];
     return adminEmails.includes(user.email?.toLowerCase() || '');
   } catch {
     return false;

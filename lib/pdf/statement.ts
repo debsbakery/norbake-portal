@@ -38,8 +38,8 @@ interface StatementData {
 export async function generateStatementPDF(data: StatementData): Promise<Buffer> {
   const {
     customer, lines, openingBalance, closingBalance, startDate, endDate,
-    bakeryName   = "Deb's Bakery",
-    bakeryEmail  = 'noreply@debsbakery.store',
+    bakeryName   = process.env.BAKERY_NAME ?? "Norbake Broome",
+    bakeryEmail  = process.env.BAKERY_EMAIL ?? 'orders@norbakebroome.com',
     headerColor  = [0, 0.416, 0.306],
   } = data
 

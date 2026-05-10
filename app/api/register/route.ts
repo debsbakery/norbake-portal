@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
               <div style="background:#006A4E;padding:24px;border-radius:8px 8px 0 0;text-align:center">
                 <h1 style="color:white;margin:0;font-size:20px">New Account Application</h1>
                 <p style="color:rgba(255,255,255,0.8);margin:6px 0 0;font-size:13px">
-                  Deb's Bakery — Wholesale Portal
+                  Norbake Broome — Wholesale Portal
                 </p>
               </div>
 

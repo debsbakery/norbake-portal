@@ -14,7 +14,7 @@ export async function sendOrderEmails({
   order, 
   customerEmail 
 }: SendOrderEmailsParams) {
-  const bakeryEmail = process.env.BAKERY_EMAIL || "debs_bakery@outlook.com";
+  const bakeryEmail = process.env.BAKERY_EMAIL || "orders@norbakebroome.com";
   const bakeryName = process.env.BAKERY_NAME || "Norbake Bakery";
   
   // Build order items HTML

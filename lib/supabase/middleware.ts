@@ -41,7 +41,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // Check if user is admin
-    const adminEmails = ['debs_bakery@outlook.com', 'admin@allstarsbakery.com'];
+    const adminEmails = ['orders@norbakebroome.com', 'admin@allstarsbakery.com'];
     if (!adminEmails.includes(user.email?.toLowerCase() || '')) {
       return NextResponse.redirect(new URL('/', request.url));
     }

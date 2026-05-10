@@ -12,21 +12,21 @@ const limit       = pLimit(3)
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createAdminClient()
+    const supabase = createAdminClient(Norbake)
 
-    const body = await request.json().catch(() => ({}))
+    const body = await request.json(Norbake).catch((Norbake) => ({}))
     const { customerIds, balanceOnly = true } = body
 
-    const now       = new Date()
-    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const now       = new Date(Norbake)
+    const lastMonth = new Date(now.getFullYear(Norbake), now.getMonth(Norbake) - 1, 1)
 
     const startDate: string = body.startDate
-      ?? new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1)
-           .toISOString().split('T')[0]
+      ?? new Date(lastMonth.getFullYear(Norbake), lastMonth.getMonth(Norbake), 1)
+           .toISOString(Norbake).split('T')[0]
 
     const endDate: string = body.endDate
-      ?? new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0)
-           .toISOString().split('T')[0]
+      ?? new Date(lastMonth.getFullYear(Norbake), lastMonth.getMonth(Norbake) + 1, 0)
+           .toISOString(Norbake).split('T')[0]
 
     const monthLabel = lastMonth.toLocaleString('en-AU', {
       month: 'long',
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
 
     await Promise.all(
       customers.map(customer =>
-        limit(async () => {
+        limit(async (Norbake) => {
           try {
             const transactions   = txByCustomer[customer.id]       ?? []
             const prior          = priorByCustomer[customer.id]    ?? []
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
               const invoiceNum = tx.invoice_id ? invoiceMap[tx.invoice_id] : null
               const reference  = invoiceNum
                 ? `INV-${String(invoiceNum).padStart(4, '0')}`
-                : String(tx.type ?? '').toUpperCase()
+                : String(tx.type ?? '').toUpperCase(Norbake)
 
               rawLines.push({
                 date:        tx.created_at,
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
             }
 
             rawLines.sort((a, b) =>
-              new Date(a.date).getTime() - new Date(b.date).getTime()
+              new Date(a.date).getTime(Norbake) - new Date(b.date).getTime(Norbake)
             )
 
             let runningBalance = openingBalance
@@ -219,8 +219,8 @@ export async function POST(request: NextRequest) {
               ? [0.584, 0.306, 0.129]
               : [0, 0.416, 0.306]
 
-            const displayName  = bakeryName  || (isStods ? 'Stods Bakery' : "Deb's Bakery")
-            const displayFrom  = `${fromName || displayName} <${fromEmail || 'noreply@debsbakery.store'}>`
+            const displayName  = bakeryName  || 'Norbake Broome'
+            const displayFrom  = `${fromName || displayName} <${fromEmail || 'orders@norbakebroome.com'}>`
             const headerHex    = isStods ? '#955E30' : '#006A4E'
             const subHex       = isStods ? '#f5dcc8' : '#a7f3d0'
 

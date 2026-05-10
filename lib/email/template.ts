@@ -114,7 +114,7 @@ export function orderConfirmationTemplate(data: OrderConfirmationData): string {
                 <tr>
                   <td style="padding: 30px; text-align: center; background-color: #f9fafb; border-radius: 0 0 8px 8px;">
                     <p style="color: #6b7280; margin: 0; font-size: 14px;">
-                      Questions? Reply to this email or contact us at debs_bakery@outlook.com
+                      Questions? Reply to this email or contact us at orders@norbakebroome.com
                     </p>
                     <p style="color: #9ca3af; margin: 10px 0 0 0; font-size: 12px;">
                       © 2026 Norbake Broome. All rights reserved.
