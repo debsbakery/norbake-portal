@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     ipMatchesSite: true,
   })
 
-  const { error: evtErr } = await supabase
+  const { data: insertedEvent, error: evtErr } = await supabase
     .from('clock_events')
     .insert({
       staff_id:        staff.id,
@@ -113,7 +113,10 @@ export async function POST(request: NextRequest) {
       flags:           flags.length > 0 ? flags : null,
     })
 
-  if (evtErr) return NextResponse.json({ error: evtErr.message }, { status: 500 })
+  if (evtErr) {
+    console.error('[clock-in] INSERT ERROR:', evtErr.message, evtErr.code, evtErr.details)
+    return NextResponse.json({ error: evtErr.message, code: evtErr.code }, { status: 500 })
+  }
 
   if (rosterEntry) {
     await supabase.from('roster_entries').update({ status: 'present' }).eq('id', rosterEntry.id)
@@ -133,5 +136,6 @@ export async function POST(request: NextRequest) {
     flags,
     gps_distance:  distanceM,
     message:       `Clock in at ${rawTimeStr}`,
+    debug_inserted: !!insertedEvent,
   })
 }
