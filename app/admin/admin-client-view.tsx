@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Clock, Users, BarChart3, Package, RefreshCw, Truck,
   DollarSign, FileText, ShoppingCart, ChefHat, Receipt,
-  Copy, Play, ClipboardList, Printer,QrCode, Store, X, CalendarDays,
+  Copy, Play, ClipboardList, Printer, QrCode, Store, X, CalendarDays, Lock,
 } from 'lucide-react'
 
 import OrdersView from './orders-view'
@@ -36,6 +36,18 @@ export default function AdminClientView({
   const [soResult,                 setSoResult]                 = useState<{
     success: boolean; message: string; ordersCreated?: number
   } | null>(null)
+
+  const [role, setRole] = useState<'owner'|'manager'|'staff_viewer'|'user'>('user')
+
+  useEffect(() => {
+    fetch('/api/auth/my-role')
+      .then(r => r.json())
+      .then(j => setRole(j.role ?? 'user'))
+  }, [])
+
+  const RANK = { owner: 4, manager: 3, staff_viewer: 2, user: 1 } as const
+  const can = (min: keyof typeof RANK) =>
+    (RANK[role] ?? 0) >= RANK[min]
 
   function toggleDay(day: string) {
     setSkippedDays(prev =>
@@ -325,6 +337,27 @@ export default function AdminClientView({
   style={{ backgroundColor: '#3E1F00' }}>
   <CalendarDays className="h-4 w-4" />Roster
 </a>
+              {can('manager') && (
+                <a href="/admin/hours"
+                  className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+                  style={{ backgroundColor: '#b45309' }}>
+                  <Clock className="h-4 w-4" />Approve Hours
+                </a>
+              )}
+              {can('manager') && (
+                <a href="/admin/payroll"
+                  className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+                  style={{ backgroundColor: '#16a34a' }}>
+                  <DollarSign className="h-4 w-4" />Payroll
+                </a>
+              )}
+              {can('owner') && (
+                <a href="/admin/settings/roles"
+                  className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+                  style={{ backgroundColor: '#7c3aed' }}>
+                  <Lock className="h-4 w-4" />Access Roles
+                </a>
+              )}
 <a href="/admin/staff/clock-qr"
   className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
   style={{ backgroundColor: '#3E1F00' }}>
