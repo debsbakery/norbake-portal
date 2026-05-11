@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import {
   Clock, Users, BarChart3, Package, RefreshCw, Truck,
   DollarSign, FileText, ShoppingCart, ChefHat, Receipt,
-  Copy, Play, ClipboardList, Printer, QrCode, Store, X, CalendarDays, Lock, Search,
+  Copy, Play, ClipboardList, Printer, QrCode, Store, X, CalendarDays, Lock,
 } from 'lucide-react'
 
 import OrdersView from './orders-view'
