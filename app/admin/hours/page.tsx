@@ -64,10 +64,15 @@ function gpsBadge(event: ClockEvent | null) {
 }
 
 export default function HoursPage() {
-  const [date, setDate]       = useState(perthToday)
+  const [date, setDate]       = useState<string>('')
   const [shifts, setShifts]   = useState<Shift[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState<string | null>(null)
+
+    // Set Perth date on client mount to avoid SSR hydration mismatch
+  useEffect(() => {
+    if (!date) setDate(perthToday())
+  }, [date])
 
   const fetchShifts = useCallback(async () => {
     setLoading(true)
