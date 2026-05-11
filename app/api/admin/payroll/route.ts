@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       status,
       staff:staff_id (
         id,
-        full_name,
+        name,
         employment_type,
         base_hourly_rate
       )
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
   // Group by staff_id
   const byStaff = new Map<string, {
     staff_id:          string
-    full_name:         string
+    name:         string
     employment_type:   string
     base_hourly_rate:  number | null
     shift_count:       number
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
     if (!byStaff.has(s.staff_id)) {
       byStaff.set(s.staff_id, {
         staff_id:         s.staff_id,
-        full_name:        staff?.full_name        ?? 'Unknown',
+        name:        staff?.name        ?? 'Unknown',
         employment_type:  staff?.employment_type  ?? 'casual',
         base_hourly_rate: staff?.base_hourly_rate ?? null,
         shift_count:      0,

@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
       roster_entry_id,
       staff:staff_id (
         id,
-        full_name,
+        name,
         employment_type,
         base_hourly_rate
       ),

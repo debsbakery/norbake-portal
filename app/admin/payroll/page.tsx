@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 
 type StaffSummary = {
   staff_id: string
-  full_name: string
+  name: string
   employment_type: string
   base_hourly_rate: number | null
   shift_count: number
@@ -74,7 +74,7 @@ export default function PayrollPage() {
     const rows = [
       ['Staff Name', 'Type', 'Rate', 'Shifts', 'Paid Hours', 'Gross Pay', 'True Cost', 'Pending'],
       ...summary.map(s => [
-        s.full_name,
+        s.name,
         s.employment_type,
         s.base_hourly_rate?.toFixed(2) ?? '',
         s.shift_count,
@@ -156,7 +156,7 @@ export default function PayrollPage() {
               <tbody className="divide-y divide-gray-100">
                 {summary.map(s => (
                   <tr key={s.staff_id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-900">{s.full_name}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900">{s.name}</td>
                     <td className="px-4 py-3 capitalize text-gray-600">{s.employment_type}</td>
                     <td className="px-4 py-3 text-right text-gray-700 font-mono">
                       {s.base_hourly_rate != null ? `$${s.base_hourly_rate.toFixed(2)}` : '—'}

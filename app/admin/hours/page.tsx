@@ -30,7 +30,7 @@ type Shift = {
   status: string
   approved_at: string | null
   manager_note: string | null
-  staff: { full_name: string; employment_type: string }
+  staff: { name: string; employment_type: string }
   clock_in: ClockEvent | null
   clock_out: ClockEvent | null
 }
@@ -146,7 +146,7 @@ export default function HoursPage() {
               {shifts.map(shift => (
                 <tr key={shift.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
-                    <div className="font-medium text-gray-900">{shift.staff.full_name}</div>
+                    <div className="font-medium text-gray-900">{shift.staff.name}</div>
                     <div className="text-xs text-gray-500 capitalize">{shift.staff.employment_type}</div>
                     {shift.arrived_late_min != null && shift.arrived_late_min > 0 && (
                       <div className="text-xs text-orange-500">{shift.arrived_late_min}min late</div>
