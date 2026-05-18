@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
   const paidStart = new Date(clockInEvent.paid_time)
 
   const { paidTime, snapReason } = computeClockOut({
-    rawTime:        nowLocal,
+    rawTime:        nowUtc,
     scheduledEnd,
     employmentType: staff.employment_type,
     paidStart,

@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     : null
 
   const { paidTime, snapReason } = computeClockIn({
-    rawTime: nowLocal,
+    rawTime: nowUtc,
     scheduledStart,
     employmentType: staff.employment_type,
   })
