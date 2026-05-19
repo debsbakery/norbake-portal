@@ -342,10 +342,14 @@ export function buildDayLines(
 }
 
 
+/**
+ * Send a weekly invoice email with PDF attachment.
+ */
 export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
   const { Resend } = await import('resend')
   const { generateWeeklyInvoicePDF } = await import('@/lib/pdf/weekly-invoice-pdf')
   type OrderLineItem = import('@/lib/pdf/weekly-invoice-pdf').OrderLineItem
+  type DayGroup = import('@/lib/pdf/weekly-invoice-pdf').DayGroup
 
   const resend = new Resend(process.env.RESEND_API_KEY)
   const supabase = createAdminClient()
@@ -368,23 +372,54 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
 
   const orderIds = (links ?? []).map((l: any) => l.order_id)
 
-  // 3. Fetch ALL order items across all orders — one flat list
+  // 3. Fetch orders (need delivery_date + total for grouping)
+  const { data: orders } = await supabase
+    .from('orders')
+    .select('id, delivery_date, total_amount')
+    .in('id', orderIds)
+    .order('delivery_date', { ascending: true })
+
+  // 4. Fetch all order items
   const { data: allItems } = await supabase
     .from('order_items')
-    .select('product_name, custom_description, quantity, unit_price, subtotal, gst_applicable')
+    .select('order_id, product_name, custom_description, quantity, unit_price, subtotal, gst_applicable')
     .in('order_id', orderIds)
     .order('product_name', { ascending: true })
 
-  const items: OrderLineItem[] = (allItems ?? []).map((item: any) => ({
-    product_name:       item.product_name,
-    custom_description: item.custom_description,
-    quantity:           Number(item.quantity),
-    unit_price:         Number(item.unit_price),
-    subtotal:           Number(item.subtotal),
-    gst_applicable:     item.gst_applicable,
-  }))
+  // Group items by order_id
+  const itemsByOrderId = new Map<string, OrderLineItem[]>()
+  for (const item of (allItems ?? [])) {
+    const oid = item.order_id as string
+    if (!itemsByOrderId.has(oid)) itemsByOrderId.set(oid, [])
+    itemsByOrderId.get(oid)!.push({
+      product_name:       item.product_name as string,
+      custom_description: item.custom_description as string | null,
+      quantity:           Number(item.quantity),
+      unit_price:         Number(item.unit_price),
+      subtotal:           Number(item.subtotal),
+      gst_applicable:     item.gst_applicable as boolean,
+    })
+  }
 
-  // 4. Build bakery details
+  // 5. Group by delivery date
+  const dayMap = new Map<string, { items: OrderLineItem[]; total: number }>()
+  for (const o of (orders ?? [])) {
+    const date = o.delivery_date
+    if (!dayMap.has(date)) dayMap.set(date, { items: [], total: 0 })
+    const day = dayMap.get(date)!
+    day.total = Math.round((day.total + Number(o.total_amount || 0)) * 100) / 100
+    day.items.push(...(itemsByOrderId.get(o.id) ?? []))
+  }
+
+  const days: DayGroup[] = Array.from(dayMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, data]) => ({
+      delivery_date: date,
+      items:         data.items,
+      day_total:     data.total,
+    }))
+
+  // 6. Bakery details
   const bakery = {
     name:        process.env.RESEND_FROM_NAME ?? 'Norbake',
     email:       process.env.RESEND_FROM_EMAIL ?? 'orders@norbakebroome.com',
@@ -396,7 +431,7 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
     bankAccount: process.env.NEXT_PUBLIC_BANK_ACCOUNT   ?? '',
   }
 
-  // 5. Generate PDF
+  // 7. Generate PDF
   const pdf = await generateWeeklyInvoicePDF({
     weekly: {
       id:             weekly.id,
@@ -417,45 +452,35 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
       phone:         weekly.customer?.phone,
       abn:           weekly.customer?.abn,
     },
-    items,
+    days,
     bakery,
   })
 
   const pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
   const filename  = `weekly-invoice-${String(weekly.invoice_number).padStart(6, '0')}.pdf`
 
-  // 6. Build email HTML — simple item table
+  // 8. Email with itemised HTML body
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'orders@norbakebroome.com'
   const fromName  = process.env.RESEND_FROM_NAME  ?? 'Norbake'
   const replyTo   = process.env.RESEND_REPLY_TO   ?? fromEmail
 
-  // Merge items for email body (same logic as PDF)
-  const mergedForEmail = new Map<string, OrderLineItem>()
-  for (const item of items) {
-    const key = (item.custom_description || item.product_name) + '|' + Number(item.unit_price).toFixed(2) + '|' + String(item.gst_applicable)
-    if (mergedForEmail.has(key)) {
-      const existing = mergedForEmail.get(key)!
-      existing.quantity += item.quantity
-      existing.subtotal = Math.round((existing.subtotal + item.subtotal) * 100) / 100
-    } else {
-      mergedForEmail.set(key, { ...item })
+  let bodyHtml = ''
+  for (const day of days) {
+    const dateObj = new Date(day.delivery_date + 'T00:00:00')
+    const label = dateObj.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short' })
+    bodyHtml += `<tr style="background:#e5e7eb;"><td colspan="4" style="padding:8px;font-weight:bold;">${label}</td></tr>`
+    for (const item of day.items) {
+      const name = item.custom_description || item.product_name
+      bodyHtml += `<tr>
+        <td style="padding:4px 10px;">${name}</td>
+        <td style="padding:4px 8px;text-align:center;">${item.quantity}</td>
+        <td style="padding:4px 8px;text-align:right;">$${item.unit_price.toFixed(2)}</td>
+        <td style="padding:4px 8px;text-align:right;">$${item.subtotal.toFixed(2)}</td>
+      </tr>`
     }
-  }
-
-  const sortedForEmail = Array.from(mergedForEmail.values()).sort((a, b) => {
-    const nameA = (a.custom_description || a.product_name).toLowerCase()
-    const nameB = (b.custom_description || b.product_name).toLowerCase()
-    return nameA.localeCompare(nameB)
-  })
-
-  let itemRowsHtml = ''
-  for (const item of sortedForEmail) {
-    const name = item.custom_description || item.product_name
-    itemRowsHtml += `<tr>
-      <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${name}</td>
-      <td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb;">${item.quantity}</td>
-      <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb;">$${item.unit_price.toFixed(2)}</td>
-      <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb;">$${item.subtotal.toFixed(2)}</td>
+    bodyHtml += `<tr style="background:#f9fafb;">
+      <td colspan="3" style="padding:4px 8px;text-align:right;font-weight:bold;">Day Total</td>
+      <td style="padding:4px 8px;text-align:right;font-weight:bold;">$${day.day_total.toFixed(2)}</td>
     </tr>`
   }
 
@@ -465,60 +490,34 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
     replyTo: replyTo,
     subject: `Weekly Invoice #${weekly.invoice_number} — ${weekly.week_start} to ${weekly.week_end}`,
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
+      <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;">
         <h2>Weekly Invoice #${weekly.invoice_number}</h2>
         <p>Hi ${weekly.customer.business_name},</p>
         <p>Please find attached your weekly invoice for <strong>${weekly.week_start}</strong> to <strong>${weekly.week_end}</strong>.</p>
-
         <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
-          <thead>
-            <tr style="background:#000;color:#fff;">
-              <th style="padding:8px;text-align:left;">Item</th>
-              <th style="padding:8px;text-align:center;">Qty</th>
-              <th style="padding:8px;text-align:right;">Unit Price</th>
-              <th style="padding:8px;text-align:right;">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemRowsHtml}
-          </tbody>
+          <thead><tr style="background:#000;color:#fff;">
+            <th style="padding:8px;text-align:left;">Item</th>
+            <th style="padding:8px;text-align:center;">Qty</th>
+            <th style="padding:8px;text-align:right;">Unit</th>
+            <th style="padding:8px;text-align:right;">Amount</th>
+          </tr></thead>
+          <tbody>${bodyHtml}</tbody>
         </table>
-
         <table style="width:100%;border-collapse:collapse;margin:20px 0;">
-          <tr>
-            <td style="padding:10px;">Subtotal (ex GST)</td>
-            <td style="padding:10px;text-align:right;">$${(Number(weekly.total_amount) - Number(weekly.gst_amount)).toFixed(2)}</td>
-          </tr>
-          <tr>
-            <td style="padding:10px;">GST</td>
-            <td style="padding:10px;text-align:right;">$${Number(weekly.gst_amount).toFixed(2)}</td>
-          </tr>
-          <tr style="background:#f3f4f6;">
-            <td style="padding:10px;font-weight:bold;">Total (inc GST)</td>
-            <td style="padding:10px;text-align:right;font-weight:bold;">$${Number(weekly.total_amount).toFixed(2)}</td>
-          </tr>
-          <tr>
-            <td style="padding:10px;">Due Date</td>
-            <td style="padding:10px;text-align:right;">${weekly.due_date}</td>
-          </tr>
+          <tr><td style="padding:10px;">Subtotal (ex GST)</td><td style="padding:10px;text-align:right;">$${(Number(weekly.total_amount) - Number(weekly.gst_amount)).toFixed(2)}</td></tr>
+          <tr><td style="padding:10px;">GST</td><td style="padding:10px;text-align:right;">$${Number(weekly.gst_amount).toFixed(2)}</td></tr>
+          <tr style="background:#f3f4f6;"><td style="padding:10px;font-weight:bold;">Total (inc GST)</td><td style="padding:10px;text-align:right;font-weight:bold;">$${Number(weekly.total_amount).toFixed(2)}</td></tr>
+          <tr><td style="padding:10px;">Due Date</td><td style="padding:10px;text-align:right;">${weekly.due_date}</td></tr>
         </table>
-
-        <p style="color:#6b7280;font-size:13px;">Full detail on the attached PDF.</p>
-        <p>Thank you for your business!</p>
-        <p><strong>${fromName}</strong></p>
+        <p style="color:#6b7280;font-size:13px;">Full detail on attached PDF.</p>
+        <p>Thank you!<br><strong>${fromName}</strong></p>
       </div>
     `,
-    attachments: [
-      {
-        filename,
-        content: pdfBuffer,
-      },
-    ],
+    attachments: [{ filename, content: pdfBuffer }],
   })
 
   if (emailErr) throw new Error(`Email send failed: ${emailErr.message}`)
 
-  // 7. Update emailed_at
   await supabase
     .from('weekly_invoices')
     .update({ emailed_at: new Date().toISOString() })
