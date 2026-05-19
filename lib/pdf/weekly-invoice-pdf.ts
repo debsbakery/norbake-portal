@@ -14,10 +14,13 @@ export interface OrderLineItem {
 
 export interface DayLine {
   delivery_date:  string
-  invoice_number: number | null
-  order_id:       string
   total_amount:   number
-  items:          OrderLineItem[]
+  orders: Array<{
+    order_id:       string
+    invoice_number: number | null
+    total_amount:   number
+    items:          OrderLineItem[]
+  }>
 }
 
 export interface WeeklyInvoiceData {
@@ -40,7 +43,6 @@ export interface WeeklyInvoiceData {
     abn?:          string | null
     phone?:        string | null
   }
-  /** One entry per delivery day, each with its line items */
   dayLines: DayLine[]
   bakery: {
     name:       string
@@ -184,30 +186,44 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
   // ── Itemised table: grouped by delivery day ─────────────────────────────
   yPos = Math.max(yPos + 10, 120)
 
-  // Build table rows: day header rows + item rows + day subtotal rows
   const tableBody: any[][] = []
 
   for (const day of dayLines) {
     const dateObj   = new Date(day.delivery_date + 'T00:00:00')
     const dayName   = dateObj.toLocaleDateString('en-AU', { weekday: 'long' })
     const dateLabel = dateObj.toLocaleDateString('en-AU')
-    const docketRef = day.invoice_number
-      ? `Docket #${String(day.invoice_number).padStart(6, '0')}`
-      : `Order ${day.order_id.slice(0, 8).toUpperCase()}`
 
-    // Day header row (spans full width visually)
+    // Day header row
     tableBody.push([
-      { content: `${dayName} ${dateLabel}  —  ${docketRef}`, colSpan: 4, styles: {
+      { content: `${dayName} ${dateLabel}`, colSpan: 4, styles: {
         fontStyle: 'bold',
-        fillColor: [235, 235, 235],
+        fillColor: [220, 220, 220],
         textColor: [0, 0, 0],
-        fontSize: 8,
+        fontSize: 9,
       }},
     ])
 
-    // Item rows
-    if (day.items && day.items.length > 0) {
-      for (const item of day.items) {
+    // Collect ALL items across all orders for this day
+    const allDayItems: OrderLineItem[] = []
+    for (const order of day.orders) {
+      allDayItems.push(...order.items)
+    }
+
+    if (allDayItems.length > 0) {
+      // Merge duplicate products (same product appearing in multiple orders on same day)
+      const merged = new Map<string, OrderLineItem>()
+      for (const item of allDayItems) {
+        const key = (item.custom_description || item.product_name) + '|' + Number(item.unit_price).toFixed(2) + '|' + String(item.gst_applicable)
+        if (merged.has(key)) {
+          const existing = merged.get(key)!
+          existing.quantity += item.quantity
+          existing.subtotal = Math.round((existing.subtotal + item.subtotal) * 100) / 100
+        } else {
+          merged.set(key, { ...item })
+        }
+      }
+
+      for (const item of merged.values()) {
         const name = item.custom_description || item.product_name
         const gstTag = item.gst_applicable ? '' : ' *'
         tableBody.push([
@@ -218,9 +234,8 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
         ])
       }
     } else {
-      // Fallback if no items found (shouldn't happen but safety net)
       tableBody.push([
-        '   (order total)',
+        '   (no item detail)',
         '',
         '',
         formatCurrency(day.total_amount),
@@ -229,14 +244,14 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
 
     // Day subtotal row
     tableBody.push([
-      { content: `Day Total`, colSpan: 3, styles: {
+      { content: 'Day Total', colSpan: 3, styles: {
         fontStyle: 'bold',
-        halign: 'right',
+        halign: 'right' as const,
         fontSize: 7.5,
       }},
       { content: formatCurrency(day.total_amount), styles: {
         fontStyle: 'bold',
-        halign: 'right',
+        halign: 'right' as const,
         fontSize: 7.5,
       }},
     ])
@@ -265,22 +280,13 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
       3: { cellWidth: 30, halign: 'right' },
     },
     margin: { left: margin, right: margin },
-    // Handle page breaks gracefully
     showHead: 'everyPage',
-    didParseCell: function(data) {
-      // Make sure day header rows don't get striped oddly
-      if (data.row.raw && Array.isArray(data.row.raw) && data.row.raw.length === 1) {
-        // This is a colSpan row (day header)
-        data.cell.styles.fillColor = [235, 235, 235]
-      }
-    },
   })
 
   // ── GST note ────────────────────────────────────────────────────────────
   const afterTableY = (doc as any).lastAutoTable.finalY + 4
 
-  // Check if any items are GST-free
-  const hasGstFreeItems = dayLines.some(d => d.items?.some(i => !i.gst_applicable))
+  const hasGstFreeItems = dayLines.some(d => d.orders.some(o => o.items.some(i => !i.gst_applicable)))
   if (hasGstFreeItems) {
     doc.setFontSize(7)
     doc.setFont('helvetica', 'italic')
@@ -294,10 +300,8 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
   const finalY   = afterTableY + (hasGstFreeItems ? 8 : 4)
   const summaryX = 210 - 75
 
-  // Check if we need a new page for totals
   if (finalY > 255) {
     doc.addPage()
-    // Re-draw totals at top of new page
     drawTotals(doc, subtotal, weekly.gst_amount, weekly.total_amount, margin, summaryX, 30, textColor)
     drawBankDetails(doc, bakery, invoiceNum, margin, 75, textColor)
   } else {
@@ -348,7 +352,6 @@ function drawBankDetails(
   doc.setTextColor(...textColor)
 
   if (bakery.bankName || bakery.bankBSB || bakery.bankAccount) {
-    // Check if we need a new page
     if (bankY > 255) {
       doc.addPage()
       bankY = 30

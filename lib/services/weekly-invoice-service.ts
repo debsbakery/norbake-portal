@@ -288,8 +288,65 @@ export async function generateWeeklyInvoice(
 }
 
 /**
+ */**
+ * Build dayLines grouped by delivery_date (merging multiple orders on same day).
+ * Shared logic used by sendWeeklyInvoiceEmail and the PDF route.
+ */
+export function buildDayLines(
+  orders: Array<{ id: string; delivery_date: string; invoice_number: number | null; total_amount: number }>,
+  itemsByOrderId: Map<string, Array<{
+    product_name: string
+    custom_description: string | null
+    quantity: number
+    unit_price: number
+    subtotal: number
+    gst_applicable: boolean
+  }>>
+) {
+  // Group orders by delivery_date
+  const dayMap = new Map<string, {
+    delivery_date: string
+    total_amount: number
+    orders: Array<{
+      order_id: string
+      invoice_number: number | null
+      total_amount: number
+      items: Array<{
+        product_name: string
+        custom_description: string | null
+        quantity: number
+        unit_price: number
+        subtotal: number
+        gst_applicable: boolean
+      }>
+    }>
+  }>()
+
+  for (const o of orders) {
+    const date = o.delivery_date
+    if (!dayMap.has(date)) {
+      dayMap.set(date, {
+        delivery_date: date,
+        total_amount: 0,
+        orders: [],
+      })
+    }
+    const day = dayMap.get(date)!
+    day.total_amount = Math.round((day.total_amount + Number(o.total_amount || 0)) * 100) / 100
+    day.orders.push({
+      order_id:       o.id,
+      invoice_number: o.invoice_number,
+      total_amount:   Number(o.total_amount || 0),
+      items:          itemsByOrderId.get(o.id) ?? [],
+    })
+  }
+
+  // Return sorted by date
+  return Array.from(dayMap.values()).sort((a, b) => a.delivery_date.localeCompare(b.delivery_date))
+}
+
+/**
  * Send a weekly invoice email with PDF attachment.
- * NOW FETCHES FULL LINE ITEMS for itemised PDF.
  */
 export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
   const { Resend } = await import('resend')
@@ -323,14 +380,14 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
     .in('id', orderIds)
     .order('delivery_date', { ascending: true })
 
-  // 3. ✨ NEW: Fetch ALL order items for all linked orders in one query
+  // 3. Fetch ALL order items
   const { data: allItems } = await supabase
     .from('order_items')
     .select('order_id, product_name, custom_description, quantity, unit_price, subtotal, gst_applicable')
     .in('order_id', orderIds)
     .order('created_at', { ascending: true })
 
-  // Group items by order_id for fast lookup
+  // Group items by order_id
   const itemsByOrderId = new Map<string, OrderLineItem[]>()
   for (const item of (allItems ?? [])) {
     const orderId = item.order_id as string
@@ -347,14 +404,16 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
     })
   }
 
-  // 4. Build dayLines WITH items
-  const dayLines = (orders ?? []).map((o: any) => ({
-    delivery_date:  o.delivery_date,
-    invoice_number: o.invoice_number,
-    order_id:       o.id,
-    total_amount:   Number(o.total_amount || 0),
-    items:          itemsByOrderId.get(o.id) ?? [],
-  }))
+  // 4. Build dayLines GROUPED by date
+  const dayLines = buildDayLines(
+    (orders ?? []).map((o: any) => ({
+      id:             o.id,
+      delivery_date:  o.delivery_date,
+      invoice_number: o.invoice_number,
+      total_amount:   Number(o.total_amount || 0),
+    })),
+    itemsByOrderId
+  )
 
   // 5. Build bakery details
   const bakery = {
@@ -396,18 +455,36 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
   const pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
   const filename  = `weekly-invoice-${String(weekly.invoice_number).padStart(6, '0')}.pdf`
 
-  // 7. Send email via Resend — also include itemised summary in HTML body
+  // 7. Send email — itemised HTML body
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'orders@norbakebroome.com'
   const fromName  = process.env.RESEND_FROM_NAME  ?? 'Norbake'
   const replyTo   = process.env.RESEND_REPLY_TO   ?? fromEmail
 
-  // Build an HTML item summary for the email body too
+  // Build HTML item summary grouped by day
   let itemSummaryHtml = ''
   for (const day of dayLines) {
     const dateObj = new Date(day.delivery_date + 'T00:00:00')
     const dayLabel = dateObj.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short' })
-    itemSummaryHtml += `<tr style="background:#f3f4f6;"><td colspan="4" style="padding:8px;font-weight:bold;">${dayLabel}</td></tr>`
-    for (const item of day.items) {
+    itemSummaryHtml += `<tr style="background:#e5e7eb;"><td colspan="4" style="padding:8px;font-weight:bold;">${dayLabel}</td></tr>`
+
+    // Merge items across orders for this day (same as PDF does)
+    const allDayItems: OrderLineItem[] = []
+    for (const order of day.orders) {
+      allDayItems.push(...order.items)
+    }
+    const merged = new Map<string, OrderLineItem>()
+    for (const item of allDayItems) {
+      const key = (item.custom_description || item.product_name) + '|' + Number(item.unit_price).toFixed(2) + '|' + String(item.gst_applicable)
+      if (merged.has(key)) {
+        const existing = merged.get(key)!
+        existing.quantity += item.quantity
+        existing.subtotal = Math.round((existing.subtotal + item.subtotal) * 100) / 100
+      } else {
+        merged.set(key, { ...item })
+      }
+    }
+
+    for (const item of merged.values()) {
       const name = item.custom_description || item.product_name
       itemSummaryHtml += `<tr>
         <td style="padding:4px 8px;">${name}</td>
@@ -464,9 +541,7 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
           </tr>
         </table>
 
-        <p style="color:#6b7280;font-size:13px;">
-          Full itemised detail is on the attached PDF invoice.
-        </p>
+        <p style="color:#6b7280;font-size:13px;">Full detail on the attached PDF.</p>
         <p>Thank you for your business!</p>
         <p><strong>${fromName}</strong></p>
       </div>
