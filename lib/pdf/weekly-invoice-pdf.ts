@@ -72,13 +72,11 @@ function drawFallbackLogo(doc: jsPDF, color: [number, number, number], margin: n
 export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise<jsPDF> {
   const { weekly, customer, days, bakery } = data
   const doc = new jsPDF()
-
   const logoColor: [number, number, number] = [62, 31, 0]
   const textColor: [number, number, number] = [0, 0, 0]
   const margin = 20
   let yPos = margin
 
-  // ── Header ──────────────────────────────────────────────────────────────
   doc.setFillColor(255, 255, 255)
   doc.rect(0, 0, 210, 50, 'F')
 
@@ -96,18 +94,16 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
   doc.setFontSize(24)
   doc.setFont('helvetica', 'bold')
   doc.text(bakery.name, margin + 60, yPos + 12)
-
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
-  doc.text(bakery.email,   margin + 60, yPos + 20)
-  doc.text(bakery.phone,   margin + 60, yPos + 25)
+  doc.text(bakery.email, margin + 60, yPos + 20)
+  doc.text(bakery.phone, margin + 60, yPos + 25)
   doc.text(bakery.address, margin + 60, yPos + 30)
   if (bakery.abn) {
     doc.setFont('helvetica', 'bold')
     doc.text('ABN: ' + bakery.abn, margin + 60, yPos + 36)
   }
 
-  // ── Title ───────────────────────────────────────────────────────────────
   doc.setTextColor(...textColor)
   doc.setFontSize(18)
   doc.setFont('helvetica', 'bold')
@@ -125,107 +121,96 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
     ? String(weekly.invoice_number).padStart(6, '0')
     : 'TEMP-' + weekly.id.slice(0, 8).toUpperCase()
 
-  // ── Invoice details box ─────────────────────────────────────────────────
   yPos = 60
   doc.setFillColor(250, 250, 250)
   doc.rect(210 - 90, yPos, 70, 48, 'F')
-
   doc.setFontSize(8)
   doc.setFont('helvetica', 'bold')
   doc.text('Invoice Number:', 210 - 85, yPos + 8)
-  doc.text('Issue Date:',     210 - 85, yPos + 16)
-  doc.text('Period:',         210 - 85, yPos + 24)
-  doc.text('Due Date:',       210 - 85, yPos + 36)
-
+  doc.text('Issue Date:', 210 - 85, yPos + 16)
+  doc.text('Period:', 210 - 85, yPos + 24)
+  doc.text('Due Date:', 210 - 85, yPos + 36)
   doc.setFont('helvetica', 'normal')
-  const issueDate  = new Date(weekly.issued_at).toLocaleDateString('en-AU')
+  const issueDate = new Date(weekly.issued_at).toLocaleDateString('en-AU')
   const periodFrom = new Date(weekly.week_start + 'T00:00:00').toLocaleDateString('en-AU')
-  const periodTo   = new Date(weekly.week_end   + 'T00:00:00').toLocaleDateString('en-AU')
-  const dueDate    = weekly.due_date
-    ? new Date(weekly.due_date + 'T00:00:00').toLocaleDateString('en-AU')
-    : '-'
-
-  doc.text(invoiceNum,       210 - margin - 2, yPos + 8,  { align: 'right' })
-  doc.text(issueDate,        210 - margin - 2, yPos + 16, { align: 'right' })
+  const periodTo = new Date(weekly.week_end + 'T00:00:00').toLocaleDateString('en-AU')
+  const dueDate = weekly.due_date ? new Date(weekly.due_date + 'T00:00:00').toLocaleDateString('en-AU') : '-'
+  doc.text(invoiceNum, 210 - margin - 2, yPos + 8, { align: 'right' })
+  doc.text(issueDate, 210 - margin - 2, yPos + 16, { align: 'right' })
   doc.setFontSize(7)
-  doc.text(`${periodFrom}`,  210 - margin - 2, yPos + 24, { align: 'right' })
-  doc.text(`to ${periodTo}`, 210 - margin - 2, yPos + 30, { align: 'right' })
+  doc.text(periodFrom, 210 - margin - 2, yPos + 24, { align: 'right' })
+  doc.text('to ' + periodTo, 210 - margin - 2, yPos + 30, { align: 'right' })
   doc.setFontSize(8)
-  doc.text(dueDate,          210 - margin - 2, yPos + 36, { align: 'right' })
+  doc.text(dueDate, 210 - margin - 2, yPos + 36, { align: 'right' })
 
-  // ── Bill To ─────────────────────────────────────────────────────────────
   yPos = 60
   doc.setFontSize(10)
   doc.setFont('helvetica', 'bold')
   doc.text('BILL TO:', margin, yPos)
-
   doc.setFontSize(9)
   yPos += 8
-
   if (customer.business_name) {
     doc.setFont('helvetica', 'bold')
     doc.text(customer.business_name, margin, yPos)
     yPos += 6
   }
   doc.setFont('helvetica', 'normal')
-
-  if (customer.email)   { doc.text(customer.email, margin, yPos); yPos += 5 }
+  if (customer.email) { doc.text(customer.email, margin, yPos); yPos += 5 }
   if (customer.address) { doc.text(customer.address, margin, yPos); yPos += 5 }
-  if (customer.phone)   { doc.text(customer.phone, margin, yPos); yPos += 5 }
+  if (customer.phone) { doc.text(customer.phone, margin, yPos); yPos += 5 }
   if (customer.abn) {
     doc.setFont('helvetica', 'bold')
     doc.text('ABN: ' + customer.abn, margin, yPos)
     yPos += 5
   }
 
-  // ── Table: items grouped by delivery day ────────────────────────────────
   yPos = Math.max(yPos + 10, 120)
 
   const tableBody: any[][] = []
   let hasGstFreeItems = false
 
   for (const day of days) {
-    const dateObj  = new Date(day.delivery_date + 'T00:00:00')
-    const dayName  = dateObj.toLocaleDateString('en-AU', { weekday: 'long' })
-    const dateStr  = dateObj.toLocaleDateString('en-AU')
+    const dateObj = new Date(day.delivery_date + 'T00:00:00')
+    const dayName = dateObj.toLocaleDateString('en-AU', { weekday: 'long' })
+    const dateStr = dateObj.toLocaleDateString('en-AU')
 
-    // Day header row
-    tableBody.push([
-      { content: `${dayName} ${dateStr}`, colSpan: 4, styles: {
+    tableBody.push([{
+      content: dayName + ' ' + dateStr,
+      colSpan: 4,
+      styles: {
         fontStyle: 'bold',
         fillColor: [220, 220, 220],
         textColor: [0, 0, 0],
         fontSize: 9,
         cellPadding: 4,
-      }},
-    ])
+      },
+    }])
 
-    // Item rows for this day
     if (day.items.length > 0) {
       for (const item of day.items) {
         const name = item.custom_description || item.product_name
         const gstTag = item.gst_applicable ? '' : ' *'
         if (!item.gst_applicable) hasGstFreeItems = true
         tableBody.push([
-          `  ${name}${gstTag}`,
+          '  ' + name + gstTag,
           String(item.quantity),
           formatCurrency(item.unit_price),
           formatCurrency(item.subtotal),
         ])
       }
     } else {
-      tableBody.push([
-        { content: '  (no items)', colSpan: 3, styles: { textColor: [150, 150, 150], fontStyle: 'italic' } },
-        formatCurrency(day.day_total),
-      ])
+      tableBody.push([{
+        content: '  (no items)',
+        colSpan: 3,
+        styles: { textColor: [150, 150, 150], fontStyle: 'italic' },
+      }, formatCurrency(day.day_total)])
     }
 
-    // Day subtotal
     tableBody.push([
-      { content: '', colSpan: 1, styles: { fillColor: [245, 245, 245] } },
       { content: '', styles: { fillColor: [245, 245, 245] } },
-      { content: 'Day Total:', styles: { fontStyle: 'bold', halign: 'right' as const, fillColor: [245, 245, 245], fontSize: 7.5 } },
-      { content: formatCurrency(day.day_total), styles: { fontStyle: 'bold', halign: 'right' as const, fillColor: [245, 245, 245], fontSize: 7.5 } },
+      { content: '', styles: { fillColor: [245, 245, 245] } },
+      { content: 'Day Total:', styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 245], fontSize: 7.5 } },
+      { content: formatCurrency(day.day_total), styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 245], fontSize: 7.5 } },
     ])
   }
 
@@ -250,4 +235,78 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
     columnStyles: {
       0: { cellWidth: 85 },
       1: { cellWidth: 20, halign: 'center' },
-      2: { cell
+      2: { cellWidth: 30, halign: 'right' },
+      3: { cellWidth: 30, halign: 'right' },
+    },
+    margin: { left: margin, right: margin },
+    showHead: 'everyPage',
+  })
+
+  const afterTableY = (doc as any).lastAutoTable.finalY + 4
+  if (hasGstFreeItems) {
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'italic')
+    doc.setTextColor(100, 100, 100)
+    doc.text('* GST-free item', margin, afterTableY)
+    doc.setTextColor(...textColor)
+  }
+
+  const subtotal = weekly.total_amount - weekly.gst_amount
+  const finalY = afterTableY + (hasGstFreeItems ? 8 : 4)
+  const summaryX = 210 - 75
+
+  if (finalY > 255) {
+    doc.addPage()
+    drawTotals(doc, subtotal, weekly.gst_amount, weekly.total_amount, margin, summaryX, 30, textColor)
+    drawBankDetails(doc, bakery, invoiceNum, margin, 75, textColor)
+  } else {
+    drawTotals(doc, subtotal, weekly.gst_amount, weekly.total_amount, margin, summaryX, finalY, textColor)
+    drawBankDetails(doc, bakery, invoiceNum, margin, finalY + 35, textColor)
+  }
+
+  return doc
+}
+
+function drawTotals(
+  doc: jsPDF, subtotal: number, gstAmount: number, totalAmount: number,
+  margin: number, summaryX: number, finalY: number, textColor: [number, number, number]
+) {
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(...textColor)
+  doc.text('Subtotal (ex GST):', summaryX, finalY)
+  doc.text(formatCurrency(subtotal), 210 - margin, finalY, { align: 'right' })
+  doc.setFont('helvetica', 'bold')
+  doc.text('GST (10%):', summaryX, finalY + 7)
+  doc.text(formatCurrency(gstAmount), 210 - margin, finalY + 7, { align: 'right' })
+  doc.setFillColor(0, 0, 0)
+  doc.rect(summaryX - 5, finalY + 12, 70, 10, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(11)
+  doc.text('TOTAL (inc GST):', summaryX, finalY + 19)
+  doc.text(formatCurrency(totalAmount), 210 - margin, finalY + 19, { align: 'right' })
+}
+
+function drawBankDetails(
+  doc: jsPDF, bakery: WeeklyInvoiceData['bakery'], invoiceNum: string,
+  margin: number, bankY: number, textColor: [number, number, number]
+) {
+  doc.setTextColor(...textColor)
+  if (bakery.bankName || bakery.bankBSB || bakery.bankAccount) {
+    if (bankY > 255) { doc.addPage(); bankY = 30 }
+    doc.setFillColor(240, 253, 244)
+    doc.rect(margin, bankY, 170, 32, 'F')
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(22, 101, 52)
+    doc.text('Payment Information', margin + 5, bankY + 8)
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(0, 0, 0)
+    let y = bankY + 15
+    if (bakery.bankName) { doc.text('Bank: ' + bakery.bankName, margin + 5, y); y += 5 }
+    if (bakery.bankBSB) { doc.text('BSB: ' + bakery.bankBSB, margin + 5, y); y += 5 }
+    if (bakery.bankAccount) { doc.text('Account: ' + bakery.bankAccount, margin + 5, y); y += 5 }
+    doc.text('Reference: ' + invoiceNum, margin + 5, y)
+  }
+}
