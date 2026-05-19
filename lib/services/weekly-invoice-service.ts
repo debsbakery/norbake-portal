@@ -1,7 +1,7 @@
 // lib/services/weekly-invoice-service.ts
 //
 // Single source of truth for weekly invoice generation.
-// Used by the admin manual-trigger endpoint, and (Phase 2c) the Sunday cron.
+// Used by the admin manual-trigger endpoint, and the Sunday cron.
 
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -21,20 +21,15 @@ export interface WeeklyInvoiceResult {
 
 /**
  * Get the Sunday-Saturday week range for a given anchor date.
- * Anchor is typically "today" (= the issue day, which is Sunday).
- * Returns the PREVIOUS week (Sun–Sat) — the one we're invoicing for.
  */
 export function getPreviousWeekRange(anchor: Date = new Date()): { start: string; end: string } {
-  // Convert to Brisbane time so we get the right "today"
   const brisbane = new Date(
     anchor.toLocaleString('en-US', { timeZone: 'Australia/Perth' })
   )
   brisbane.setHours(0, 0, 0, 0)
 
-  const dayOfWeek = brisbane.getDay() // 0=Sun
+  const dayOfWeek = brisbane.getDay()
 
-  // The Sunday that just passed (or today if today is Sunday) is the start of THIS week.
-  // We want the PREVIOUS week — so go back 7 days from there.
   const thisWeekStart = new Date(brisbane)
   thisWeekStart.setDate(brisbane.getDate() - dayOfWeek)
 
@@ -84,8 +79,8 @@ async function getNextInvoiceNumber(supabase: ReturnType<typeof createAdminClien
  */
 export async function generateWeeklyInvoice(
   customerId: string,
-  weekStart:  string,   // YYYY-MM-DD (must be a Sunday)
-  weekEnd:    string,   // YYYY-MM-DD (must be a Saturday)
+  weekStart:  string,
+  weekEnd:    string,
 ): Promise<WeeklyInvoiceResult> {
   const supabase = createAdminClient()
 
@@ -131,7 +126,7 @@ export async function generateWeeklyInvoice(
     }
   }
 
-  // ── 3. Sum totals (already include GST in orders.total_amount) ──────────
+  // ── 3. Sum totals ──────────────────────────────────────────────────────
   const totalAmount = Math.round(
     orders.reduce((s, o) => s + Number(o.total_amount || 0), 0) * 100
   ) / 100
@@ -167,7 +162,6 @@ export async function generateWeeklyInvoice(
   let wasRevised = false
 
   if (existing) {
-    // ── REGENERATE: update existing ───────────────────────────────────────
     wasRevised    = true
     weeklyId      = existing.id
     invoiceNumber = existing.invoice_number ?? 0
@@ -186,14 +180,12 @@ export async function generateWeeklyInvoice(
 
     if (updErr) throw new Error(updErr.message)
 
-    // Wipe + re-insert order links (in case orders changed since last run)
     await supabase
       .from('weekly_invoice_orders')
       .delete()
       .eq('weekly_invoice_id', existing.id)
 
   } else {
-    // ── CREATE: brand new weekly invoice ──────────────────────────────────
     invoiceNumber = await getNextInvoiceNumber(supabase)
 
     const { data: created, error: insErr } = await supabase
@@ -229,7 +221,7 @@ export async function generateWeeklyInvoice(
 
   if (linkErr) throw new Error(linkErr.message)
 
-   // ── 8. Stamp orders with weekly_invoice_id + mark as invoiced ───────────────
+  // ── 8. Stamp orders with weekly_invoice_id + mark as invoiced ──────────
   await supabase
     .from('orders')
     .update({
@@ -239,8 +231,8 @@ export async function generateWeeklyInvoice(
       invoice_number:    invoiceNumber,
     })
     .in('id', orderIds)
-  // ── 9. Sync ar_transactions (one row for the weekly invoice) ───────────
-  // Remove any prior weekly tx for this same weekly_invoice_id (idempotent)
+
+  // ── 9. Sync ar_transactions ─────────────────────────────────────────────
   await supabase
     .from('ar_transactions')
     .delete()
@@ -253,7 +245,8 @@ export async function generateWeeklyInvoice(
       type:         'invoice',
       amount:       totalAmount,
       due_date:     dueDateStr,
-      description:  `Weekly Invoice #${invoiceNumber}`,      created_at:   new Date().toISOString(),
+      description:  `Weekly Invoice #${invoiceNumber}`,
+      created_at:   new Date().toISOString(),
     })
 
   // ── 10. Recalculate customer balance ────────────────────────────────────
@@ -292,12 +285,16 @@ export async function generateWeeklyInvoice(
       : `Weekly invoice #${invoiceNumber} CREATED (${orders.length} orders, $${totalAmount.toFixed(2)})`,
     was_revised:       wasRevised,
   }
-}/**
+}
+
+/**
  * Send a weekly invoice email with PDF attachment.
+ * NOW FETCHES FULL LINE ITEMS for itemised PDF.
  */
 export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
   const { Resend } = await import('resend')
   const { generateWeeklyInvoicePDF } = await import('@/lib/pdf/weekly-invoice-pdf')
+  type OrderLineItem = import('@/lib/pdf/weekly-invoice-pdf').OrderLineItem
 
   const resend = new Resend(process.env.RESEND_API_KEY)
   const supabase = createAdminClient()
@@ -326,14 +323,40 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
     .in('id', orderIds)
     .order('delivery_date', { ascending: true })
 
+  // 3. ✨ NEW: Fetch ALL order items for all linked orders in one query
+  const { data: allItems } = await supabase
+    .from('order_items')
+    .select('order_id, product_name, custom_description, quantity, unit_price, subtotal, gst_applicable')
+    .in('order_id', orderIds)
+    .order('created_at', { ascending: true })
+
+  // Group items by order_id for fast lookup
+  const itemsByOrderId = new Map<string, OrderLineItem[]>()
+  for (const item of (allItems ?? [])) {
+    const orderId = item.order_id as string
+    if (!itemsByOrderId.has(orderId)) {
+      itemsByOrderId.set(orderId, [])
+    }
+    itemsByOrderId.get(orderId)!.push({
+      product_name:       item.product_name as string,
+      custom_description: item.custom_description as string | null,
+      quantity:           Number(item.quantity),
+      unit_price:         Number(item.unit_price),
+      subtotal:           Number(item.subtotal),
+      gst_applicable:     item.gst_applicable as boolean,
+    })
+  }
+
+  // 4. Build dayLines WITH items
   const dayLines = (orders ?? []).map((o: any) => ({
     delivery_date:  o.delivery_date,
     invoice_number: o.invoice_number,
     order_id:       o.id,
     total_amount:   Number(o.total_amount || 0),
+    items:          itemsByOrderId.get(o.id) ?? [],
   }))
 
-  // 3. Build bakery details
+  // 5. Build bakery details
   const bakery = {
     name:        process.env.RESEND_FROM_NAME ?? 'Norbake',
     email:       process.env.RESEND_FROM_EMAIL ?? 'orders@norbakebroome.com',
@@ -345,7 +368,7 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
     bankAccount: process.env.NEXT_PUBLIC_BANK_ACCOUNT   ?? '',
   }
 
-  // 4. Generate PDF
+  // 6. Generate PDF
   const pdf = await generateWeeklyInvoicePDF({
     weekly: {
       id:             weekly.id,
@@ -373,10 +396,28 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
   const pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
   const filename  = `weekly-invoice-${String(weekly.invoice_number).padStart(6, '0')}.pdf`
 
-  // 5. Send email via Resend
+  // 7. Send email via Resend — also include itemised summary in HTML body
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'orders@norbakebroome.com'
   const fromName  = process.env.RESEND_FROM_NAME  ?? 'Norbake'
   const replyTo   = process.env.RESEND_REPLY_TO   ?? fromEmail
+
+  // Build an HTML item summary for the email body too
+  let itemSummaryHtml = ''
+  for (const day of dayLines) {
+    const dateObj = new Date(day.delivery_date + 'T00:00:00')
+    const dayLabel = dateObj.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short' })
+    itemSummaryHtml += `<tr style="background:#f3f4f6;"><td colspan="4" style="padding:8px;font-weight:bold;">${dayLabel}</td></tr>`
+    for (const item of day.items) {
+      const name = item.custom_description || item.product_name
+      itemSummaryHtml += `<tr>
+        <td style="padding:4px 8px;">${name}</td>
+        <td style="padding:4px 8px;text-align:center;">${item.quantity}</td>
+        <td style="padding:4px 8px;text-align:right;">$${item.unit_price.toFixed(2)}</td>
+        <td style="padding:4px 8px;text-align:right;">$${item.subtotal.toFixed(2)}</td>
+      </tr>`
+    }
+    itemSummaryHtml += `<tr><td colspan="3" style="padding:4px 8px;text-align:right;font-weight:bold;">Day Total</td><td style="padding:4px 8px;text-align:right;font-weight:bold;">$${day.total_amount.toFixed(2)}</td></tr>`
+  }
 
   const { error: emailErr } = await resend.emails.send({
     from:    `${fromName} <${fromEmail}>`,
@@ -384,30 +425,47 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
     replyTo: replyTo,
     subject: `Weekly Invoice #${weekly.invoice_number} — ${weekly.week_start} to ${weekly.week_end}`,
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
         <h2>Weekly Invoice #${weekly.invoice_number}</h2>
         <p>Hi ${weekly.customer.business_name},</p>
         <p>Please find attached your weekly invoice for <strong>${weekly.week_start}</strong> to <strong>${weekly.week_end}</strong>.</p>
-        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-          <tr style="background: #f3f4f6;">
-            <td style="padding: 10px; font-weight: bold;">Total (inc GST)</td>
-            <td style="padding: 10px; text-align: right; font-weight: bold;">$${Number(weekly.total_amount).toFixed(2)}</td>
+
+        <h3 style="margin-top:20px;">Order Summary</h3>
+        <table style="width:100%;border-collapse:collapse;margin:10px 0;font-size:14px;">
+          <thead>
+            <tr style="background:#000;color:#fff;">
+              <th style="padding:8px;text-align:left;">Item</th>
+              <th style="padding:8px;text-align:center;">Qty</th>
+              <th style="padding:8px;text-align:right;">Unit</th>
+              <th style="padding:8px;text-align:right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemSummaryHtml}
+          </tbody>
+        </table>
+
+        <table style="width:100%;border-collapse:collapse;margin:20px 0;">
+          <tr>
+            <td style="padding:10px;">Subtotal (ex GST)</td>
+            <td style="padding:10px;text-align:right;">$${(Number(weekly.total_amount) - Number(weekly.gst_amount)).toFixed(2)}</td>
           </tr>
           <tr>
-            <td style="padding: 10px;">GST</td>
-            <td style="padding: 10px; text-align: right;">$${Number(weekly.gst_amount).toFixed(2)}</td>
+            <td style="padding:10px;">GST</td>
+            <td style="padding:10px;text-align:right;">$${Number(weekly.gst_amount).toFixed(2)}</td>
+          </tr>
+          <tr style="background:#f3f4f6;">
+            <td style="padding:10px;font-weight:bold;">Total (inc GST)</td>
+            <td style="padding:10px;text-align:right;font-weight:bold;">$${Number(weekly.total_amount).toFixed(2)}</td>
           </tr>
           <tr>
-            <td style="padding: 10px;">Due Date</td>
-            <td style="padding: 10px; text-align: right;">${weekly.due_date}</td>
-          </tr>
-          <tr>
-            <td style="padding: 10px;">Orders Included</td>
-            <td style="padding: 10px; text-align: right;">${dayLines.length}</td>
+            <td style="padding:10px;">Due Date</td>
+            <td style="padding:10px;text-align:right;">${weekly.due_date}</td>
           </tr>
         </table>
-        <p style="color: #6b7280; font-size: 14px;">
-          Payment details are on the attached invoice PDF.
+
+        <p style="color:#6b7280;font-size:13px;">
+          Full itemised detail is on the attached PDF invoice.
         </p>
         <p>Thank you for your business!</p>
         <p><strong>${fromName}</strong></p>
@@ -423,7 +481,7 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
 
   if (emailErr) throw new Error(`Email send failed: ${emailErr.message}`)
 
-  // 6. Update emailed_at
+  // 8. Update emailed_at
   await supabase
     .from('weekly_invoices')
     .update({ emailed_at: new Date().toISOString() })

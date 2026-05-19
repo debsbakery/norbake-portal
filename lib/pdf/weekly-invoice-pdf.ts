@@ -3,6 +3,23 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { formatCurrency } from '@/lib/utils'
 
+export interface OrderLineItem {
+  product_name:       string
+  custom_description: string | null
+  quantity:           number
+  unit_price:         number
+  subtotal:           number
+  gst_applicable:     boolean
+}
+
+export interface DayLine {
+  delivery_date:  string
+  invoice_number: number | null
+  order_id:       string
+  total_amount:   number
+  items:          OrderLineItem[]
+}
+
 export interface WeeklyInvoiceData {
   weekly: {
     id:             string
@@ -23,13 +40,8 @@ export interface WeeklyInvoiceData {
     abn?:          string | null
     phone?:        string | null
   }
-  /** One row per delivery day (Sun–Sat) */
-  dayLines: Array<{
-    delivery_date:  string
-    invoice_number: number | null
-    order_id:       string
-    total_amount:   number
-  }>
+  /** One entry per delivery day, each with its line items */
+  dayLines: DayLine[]
   bakery: {
     name:       string
     email:      string
@@ -64,7 +76,7 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
   const { weekly, customer, dayLines, bakery } = data
   const doc = new jsPDF()
 
-  const logoColor: [number, number, number] = [62, 31, 0]   // Norbake brown — matches default
+  const logoColor: [number, number, number] = [62, 31, 0]
   const textColor: [number, number, number] = [0, 0, 0]
   const margin = 20
   let yPos = margin
@@ -136,13 +148,13 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
     ? new Date(weekly.due_date + 'T00:00:00').toLocaleDateString('en-AU')
     : '-'
 
-  doc.text(invoiceNum,                   210 - margin - 2, yPos + 8,  { align: 'right' })
-  doc.text(issueDate,                    210 - margin - 2, yPos + 16, { align: 'right' })
+  doc.text(invoiceNum,      210 - margin - 2, yPos + 8,  { align: 'right' })
+  doc.text(issueDate,       210 - margin - 2, yPos + 16, { align: 'right' })
   doc.setFontSize(7)
-  doc.text(`${periodFrom}`,              210 - margin - 2, yPos + 24, { align: 'right' })
-  doc.text(`to ${periodTo}`,             210 - margin - 2, yPos + 30, { align: 'right' })
+  doc.text(`${periodFrom}`, 210 - margin - 2, yPos + 24, { align: 'right' })
+  doc.text(`to ${periodTo}`,210 - margin - 2, yPos + 30, { align: 'right' })
   doc.setFontSize(8)
-  doc.text(dueDate,                      210 - margin - 2, yPos + 36, { align: 'right' })
+  doc.text(dueDate,         210 - margin - 2, yPos + 36, { align: 'right' })
 
   // ── Bill To ─────────────────────────────────────────────────────────────
   yPos = 60
@@ -169,51 +181,143 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
     yPos += 5
   }
 
-  // ── Line items: one row per delivery day ────────────────────────────────
+  // ── Itemised table: grouped by delivery day ─────────────────────────────
   yPos = Math.max(yPos + 10, 120)
 
-  const tableData = dayLines.map(line => {
-    const dateObj    = new Date(line.delivery_date + 'T00:00:00')
-    const dayName    = dateObj.toLocaleDateString('en-AU', { weekday: 'short' })
-    const dateLabel  = dateObj.toLocaleDateString('en-AU')
-    const docketRef  = line.invoice_number
-      ? `Daily #${String(line.invoice_number).padStart(6, '0')}`
-      : `Order ${line.order_id.slice(0, 8).toUpperCase()}`
-    return [
-      `${dayName} ${dateLabel}`,
-      docketRef,
-      formatCurrency(line.total_amount),
-    ]
-  })
+  // Build table rows: day header rows + item rows + day subtotal rows
+  const tableBody: any[][] = []
+
+  for (const day of dayLines) {
+    const dateObj   = new Date(day.delivery_date + 'T00:00:00')
+    const dayName   = dateObj.toLocaleDateString('en-AU', { weekday: 'long' })
+    const dateLabel = dateObj.toLocaleDateString('en-AU')
+    const docketRef = day.invoice_number
+      ? `Docket #${String(day.invoice_number).padStart(6, '0')}`
+      : `Order ${day.order_id.slice(0, 8).toUpperCase()}`
+
+    // Day header row (spans full width visually)
+    tableBody.push([
+      { content: `${dayName} ${dateLabel}  —  ${docketRef}`, colSpan: 4, styles: {
+        fontStyle: 'bold',
+        fillColor: [235, 235, 235],
+        textColor: [0, 0, 0],
+        fontSize: 8,
+      }},
+    ])
+
+    // Item rows
+    if (day.items && day.items.length > 0) {
+      for (const item of day.items) {
+        const name = item.custom_description || item.product_name
+        const gstTag = item.gst_applicable ? '' : ' *'
+        tableBody.push([
+          `   ${name}${gstTag}`,
+          String(item.quantity),
+          formatCurrency(item.unit_price),
+          formatCurrency(item.subtotal),
+        ])
+      }
+    } else {
+      // Fallback if no items found (shouldn't happen but safety net)
+      tableBody.push([
+        '   (order total)',
+        '',
+        '',
+        formatCurrency(day.total_amount),
+      ])
+    }
+
+    // Day subtotal row
+    tableBody.push([
+      { content: `Day Total`, colSpan: 3, styles: {
+        fontStyle: 'bold',
+        halign: 'right',
+        fontSize: 7.5,
+      }},
+      { content: formatCurrency(day.total_amount), styles: {
+        fontStyle: 'bold',
+        halign: 'right',
+        fontSize: 7.5,
+      }},
+    ])
+  }
 
   autoTable(doc, {
     startY: yPos,
-    head:   [['Delivery Day', 'Reference', 'Amount (inc GST)']],
-    body:   tableData,
-    theme:  'striped',
+    head: [['Item', 'Qty', 'Unit Price', 'Amount']],
+    body: tableBody,
+    theme: 'striped',
     headStyles: {
       fillColor: [0, 0, 0],
       textColor: [255, 255, 255],
       fontStyle: 'bold',
-      fontSize:  9,
+      fontSize: 9,
     },
     bodyStyles: {
-      fontSize:  8,
+      fontSize: 7.5,
       textColor: [0, 0, 0],
+      cellPadding: 2,
     },
     columnStyles: {
-      0: { cellWidth: 70 },
-      1: { cellWidth: 60 },
-      2: { cellWidth: 35, halign: 'right' },
+      0: { cellWidth: 85 },
+      1: { cellWidth: 20, halign: 'center' },
+      2: { cellWidth: 30, halign: 'right' },
+      3: { cellWidth: 30, halign: 'right' },
     },
     margin: { left: margin, right: margin },
+    // Handle page breaks gracefully
+    showHead: 'everyPage',
+    didParseCell: function(data) {
+      // Make sure day header rows don't get striped oddly
+      if (data.row.raw && Array.isArray(data.row.raw) && data.row.raw.length === 1) {
+        // This is a colSpan row (day header)
+        data.cell.styles.fillColor = [235, 235, 235]
+      }
+    },
   })
+
+  // ── GST note ────────────────────────────────────────────────────────────
+  const afterTableY = (doc as any).lastAutoTable.finalY + 4
+
+  // Check if any items are GST-free
+  const hasGstFreeItems = dayLines.some(d => d.items?.some(i => !i.gst_applicable))
+  if (hasGstFreeItems) {
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'italic')
+    doc.setTextColor(100, 100, 100)
+    doc.text('* GST-free item', margin, afterTableY)
+    doc.setTextColor(...textColor)
+  }
 
   // ── Totals ──────────────────────────────────────────────────────────────
   const subtotal = weekly.total_amount - weekly.gst_amount
-  const finalY   = (doc as any).lastAutoTable.finalY + 10
+  const finalY   = afterTableY + (hasGstFreeItems ? 8 : 4)
   const summaryX = 210 - 75
 
+  // Check if we need a new page for totals
+  if (finalY > 255) {
+    doc.addPage()
+    // Re-draw totals at top of new page
+    drawTotals(doc, subtotal, weekly.gst_amount, weekly.total_amount, margin, summaryX, 30, textColor)
+    drawBankDetails(doc, bakery, invoiceNum, margin, 75, textColor)
+  } else {
+    drawTotals(doc, subtotal, weekly.gst_amount, weekly.total_amount, margin, summaryX, finalY, textColor)
+    drawBankDetails(doc, bakery, invoiceNum, margin, finalY + 35, textColor)
+  }
+
+  return doc
+}
+
+function drawTotals(
+  doc: jsPDF,
+  subtotal: number,
+  gstAmount: number,
+  totalAmount: number,
+  margin: number,
+  summaryX: number,
+  finalY: number,
+  textColor: [number, number, number]
+) {
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(...textColor)
@@ -222,7 +326,7 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
 
   doc.setFont('helvetica', 'bold')
   doc.text('GST (10%):', summaryX, finalY + 7)
-  doc.text(formatCurrency(weekly.gst_amount), 210 - margin, finalY + 7, { align: 'right' })
+  doc.text(formatCurrency(gstAmount), 210 - margin, finalY + 7, { align: 'right' })
 
   doc.setFillColor(0, 0, 0)
   doc.rect(summaryX - 5, finalY + 12, 70, 10, 'F')
@@ -230,13 +334,26 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(11)
   doc.text('TOTAL (inc GST):', summaryX, finalY + 19)
-  doc.text(formatCurrency(weekly.total_amount), 210 - margin, finalY + 19, { align: 'right' })
+  doc.text(formatCurrency(totalAmount), 210 - margin, finalY + 19, { align: 'right' })
+}
 
-  // ── Bank Payment Details ────────────────────────────────────────────────
+function drawBankDetails(
+  doc: jsPDF,
+  bakery: WeeklyInvoiceData['bakery'],
+  invoiceNum: string,
+  margin: number,
+  bankY: number,
+  textColor: [number, number, number]
+) {
   doc.setTextColor(...textColor)
-  const bankY = finalY + 35
 
   if (bakery.bankName || bakery.bankBSB || bakery.bankAccount) {
+    // Check if we need a new page
+    if (bankY > 255) {
+      doc.addPage()
+      bankY = 30
+    }
+
     doc.setFillColor(240, 253, 244)
     doc.rect(margin, bankY, 170, 32, 'F')
 
@@ -255,6 +372,4 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
     if (bakery.bankAccount) { doc.text('Account: ' + bakery.bankAccount, margin + 5, bankLineY); bankLineY += 5 }
     doc.text('Reference: ' + invoiceNum, margin + 5, bankLineY)
   }
-
-  return doc
 }
