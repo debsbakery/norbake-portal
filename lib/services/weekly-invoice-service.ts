@@ -228,7 +228,7 @@ export async function generateWeeklyInvoice(
       weekly_invoice_id: weeklyId,
       status:            'invoiced',
       invoiced_at:       new Date().toISOString(),
-      invoice_number:    invoiceNumber,
+      
     })
     .in('id', orderIds)
 
