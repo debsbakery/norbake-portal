@@ -18,7 +18,11 @@ export async function GET(request: NextRequest) {
   const brisbane  = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
   const dayOfWeek = brisbane.getDay() // 0 = Sunday
 
-  if (dayOfWeek !== 0) {
+    // Allow bypass via ?force=true for manual testing
+  const url = new URL(request.url)
+  const force = url.searchParams.get('force') === 'true'
+  
+  if (dayOfWeek !== 0 && !force) {
     console.log(`[CRON weekly-invoices] Not Sunday in Brisbane (day=${dayOfWeek}) — skipping`)
     return NextResponse.json({
       success: true,
@@ -26,7 +30,6 @@ export async function GET(request: NextRequest) {
       reason:  `Not Sunday in Brisbane (day=${dayOfWeek})`,
     })
   }
-
   // ── Get the previous Sun–Sat week ─────────────────────────────────────────
   const { start: weekStart, end: weekEnd } = getPreviousWeekRange(now)
   console.log(`[CRON weekly-invoices] Processing week ${weekStart} → ${weekEnd}`)
