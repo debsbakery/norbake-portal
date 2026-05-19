@@ -229,12 +229,16 @@ export async function generateWeeklyInvoice(
 
   if (linkErr) throw new Error(linkErr.message)
 
-  // ── 8. Stamp orders with weekly_invoice_id ──────────────────────────────
+   // ── 8. Stamp orders with weekly_invoice_id + mark as invoiced ───────────────
   await supabase
     .from('orders')
-    .update({ weekly_invoice_id: weeklyId })
+    .update({
+      weekly_invoice_id: weeklyId,
+      status:            'invoiced',
+      invoiced_at:       new Date().toISOString(),
+      invoice_number:    invoiceNumber,
+    })
     .in('id', orderIds)
-
   // ── 9. Sync ar_transactions (one row for the weekly invoice) ───────────
   // Remove any prior weekly tx for this same weekly_invoice_id (idempotent)
   await supabase
