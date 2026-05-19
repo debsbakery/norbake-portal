@@ -253,8 +253,7 @@ export async function generateWeeklyInvoice(
       type:         'invoice',
       amount:       totalAmount,
       due_date:     dueDateStr,
-      description:  `weekly:${weeklyId}`,
-      created_at:   new Date().toISOString(),
+      description:  `Weekly Invoice #${invoiceNumber}`,      created_at:   new Date().toISOString(),
     })
 
   // ── 10. Recalculate customer balance ────────────────────────────────────
