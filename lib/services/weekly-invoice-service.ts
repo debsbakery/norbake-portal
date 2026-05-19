@@ -101,7 +101,10 @@ export async function generateWeeklyInvoice(
   }
 
   // ── 2. Find all orders in the week range that aren't cancelled ──────────
-  const { data: orders, error: oErr } = await supabase
+   // ── 2. Find orders in the week range ────────────────────────────────────
+  // On first run: only grab orders that are NOT already invoiced individually
+  // On revision: also include orders already linked to THIS weekly invoice
+  const { data: allWeekOrders, error: oErr } = await supabase
     .from('orders')
     .select('id, delivery_date, total_amount, status, weekly_invoice_id')
     .eq('customer_id', customerId)
@@ -110,6 +113,17 @@ export async function generateWeeklyInvoice(
     .neq('status', 'cancelled')
     .order('delivery_date', { ascending: true })
 
+  if (oErr) throw new Error(oErr.message)
+
+  // Filter: include orders that are pending/confirmed OR already part of this weekly invoice
+  const orders = (allWeekOrders ?? []).filter(o => {
+    // Already linked to this weekly invoice (revision) — always include
+    if (existing && o.weekly_invoice_id === existing.id) return true
+    // Already invoiced individually — skip (don't double-count)
+    if (o.status === 'invoiced' && !o.weekly_invoice_id) return false
+    // Pending/confirmed — include
+    return true
+  })
   if (oErr) throw new Error(oErr.message)
 
   if (!orders || orders.length === 0) {
