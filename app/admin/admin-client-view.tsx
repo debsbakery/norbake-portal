@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   Clock, Users, BarChart3, Package, RefreshCw, Truck,
-  DollarSign, FileText, ShoppingCart, ChefHat, Receipt,
+  DollarSign, FileText,Thermometer, ShoppingCart, ChefHat, Receipt,
   Copy, Play, ClipboardList, Printer, QrCode, Store, X, CalendarDays, Search, Lock,
 } from 'lucide-react'
 
@@ -377,6 +377,11 @@ export default function AdminClientView({
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
                 style={{ backgroundColor: '#0f766e' }}>
                 <Store className="h-4 w-4" />Shop Reports
+              </a>
+                            <a href="/admin/temperature"
+                className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+                style={{ backgroundColor: '#0891b2' }}>
+                <Thermometer className="h-4 w-4" />Temp & Cash
               </a>
               <a href="/admin/search"
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
