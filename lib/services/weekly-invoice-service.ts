@@ -287,11 +287,7 @@ export async function generateWeeklyInvoice(
   }
 }
 
-/**
- */**
- * Build dayLines grouped by delivery_date (merging multiple orders on same day).
- * Shared logic used by sendWeeklyInvoiceEmail and the PDF route.
- */
+
 export function buildDayLines(
   orders: Array<{ id: string; delivery_date: string; invoice_number: number | null; total_amount: number }>,
   itemsByOrderId: Map<string, Array<{
