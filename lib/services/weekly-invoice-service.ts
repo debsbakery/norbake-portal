@@ -293,4 +293,142 @@ export async function generateWeeklyInvoice(
       : `Weekly invoice #${invoiceNumber} CREATED (${orders.length} orders, $${totalAmount.toFixed(2)})`,
     was_revised:       wasRevised,
   }
+}/**
+ * Send a weekly invoice email with PDF attachment.
+ */
+export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
+  const { Resend } = await import('resend')
+  const { generateWeeklyInvoicePDF } = await import('@/lib/pdf/weekly-invoice-pdf')
+
+  const resend = new Resend(process.env.RESEND_API_KEY)
+  const supabase = createAdminClient()
+
+  // 1. Fetch weekly invoice + customer
+  const { data: weekly, error: wErr } = await supabase
+    .from('weekly_invoices')
+    .select(`*, customer:customers ( business_name, email, address, phone, abn )`)
+    .eq('id', weeklyInvoiceId)
+    .single()
+
+  if (wErr || !weekly) throw new Error(`Weekly invoice ${weeklyInvoiceId} not found`)
+  if (!weekly.customer?.email) throw new Error(`No email for customer on weekly invoice ${weeklyInvoiceId}`)
+
+  // 2. Fetch linked orders
+  const { data: links } = await supabase
+    .from('weekly_invoice_orders')
+    .select('order_id')
+    .eq('weekly_invoice_id', weeklyInvoiceId)
+
+  const orderIds = (links ?? []).map((l: any) => l.order_id)
+
+  const { data: orders } = await supabase
+    .from('orders')
+    .select('id, delivery_date, invoice_number, total_amount')
+    .in('id', orderIds)
+    .order('delivery_date', { ascending: true })
+
+  const dayLines = (orders ?? []).map((o: any) => ({
+    delivery_date:  o.delivery_date,
+    invoice_number: o.invoice_number,
+    order_id:       o.id,
+    total_amount:   Number(o.total_amount || 0),
+  }))
+
+  // 3. Build bakery details
+  const bakery = {
+    name:        process.env.RESEND_FROM_NAME ?? 'Norbake',
+    email:       process.env.RESEND_FROM_EMAIL ?? 'orders@norbakebroome.com',
+    phone:       process.env.NEXT_PUBLIC_BAKERY_PHONE   ?? '',
+    address:     process.env.NEXT_PUBLIC_BAKERY_ADDRESS ?? '',
+    abn:         process.env.NEXT_PUBLIC_BAKERY_ABN     ?? '',
+    bankName:    process.env.NEXT_PUBLIC_BANK_NAME      ?? '',
+    bankBSB:     process.env.NEXT_PUBLIC_BANK_BSB       ?? '',
+    bankAccount: process.env.NEXT_PUBLIC_BANK_ACCOUNT   ?? '',
+  }
+
+  // 4. Generate PDF
+  const pdf = await generateWeeklyInvoicePDF({
+    weekly: {
+      id:             weekly.id,
+      invoice_number: weekly.invoice_number,
+      week_start:     weekly.week_start,
+      week_end:       weekly.week_end,
+      total_amount:   Number(weekly.total_amount),
+      gst_amount:     Number(weekly.gst_amount),
+      issued_at:      weekly.issued_at,
+      revised_at:     weekly.revised_at,
+      due_date:       weekly.due_date,
+      status:         weekly.status,
+    },
+    customer: {
+      business_name: weekly.customer?.business_name ?? '',
+      email:         weekly.customer?.email         ?? '',
+      address:       weekly.customer?.address,
+      phone:         weekly.customer?.phone,
+      abn:           weekly.customer?.abn,
+    },
+    dayLines,
+    bakery,
+  })
+
+  const pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
+  const filename  = `weekly-invoice-${String(weekly.invoice_number).padStart(6, '0')}.pdf`
+
+  // 5. Send email via Resend
+  const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'orders@norbakebroome.com'
+  const fromName  = process.env.RESEND_FROM_NAME  ?? 'Norbake'
+  const replyTo   = process.env.RESEND_REPLY_TO   ?? fromEmail
+
+  const { error: emailErr } = await resend.emails.send({
+    from:    `${fromName} <${fromEmail}>`,
+    to:      weekly.customer.email,
+    replyTo: replyTo,
+    subject: `Weekly Invoice #${weekly.invoice_number} — ${weekly.week_start} to ${weekly.week_end}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Weekly Invoice #${weekly.invoice_number}</h2>
+        <p>Hi ${weekly.customer.business_name},</p>
+        <p>Please find attached your weekly invoice for <strong>${weekly.week_start}</strong> to <strong>${weekly.week_end}</strong>.</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+          <tr style="background: #f3f4f6;">
+            <td style="padding: 10px; font-weight: bold;">Total (inc GST)</td>
+            <td style="padding: 10px; text-align: right; font-weight: bold;">$${Number(weekly.total_amount).toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px;">GST</td>
+            <td style="padding: 10px; text-align: right;">$${Number(weekly.gst_amount).toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px;">Due Date</td>
+            <td style="padding: 10px; text-align: right;">${weekly.due_date}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px;">Orders Included</td>
+            <td style="padding: 10px; text-align: right;">${dayLines.length}</td>
+          </tr>
+        </table>
+        <p style="color: #6b7280; font-size: 14px;">
+          Payment details are on the attached invoice PDF.
+        </p>
+        <p>Thank you for your business!</p>
+        <p><strong>${fromName}</strong></p>
+      </div>
+    `,
+    attachments: [
+      {
+        filename,
+        content: pdfBuffer,
+      },
+    ],
+  })
+
+  if (emailErr) throw new Error(`Email send failed: ${emailErr.message}`)
+
+  // 6. Update emailed_at
+  await supabase
+    .from('weekly_invoices')
+    .update({ emailed_at: new Date().toISOString() })
+    .eq('id', weeklyInvoiceId)
+
+  return { success: true, email: weekly.customer.email, invoice_number: weekly.invoice_number }
 }
