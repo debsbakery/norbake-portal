@@ -232,11 +232,16 @@ export async function generateWeeklyInvoice(
     })
     .in('id', orderIds)
 
-  // ── 9. Sync ar_transactions ─────────────────────────────────────────────
+    // ── 9. Sync ar_transactions (one row for the weekly invoice) ───────────
+  // Delete ANY prior weekly invoice AR entries for this weekly invoice
+  // Match on weekly_invoice_id OR on the description pattern
+  const weeklyInvDesc = `Weekly Invoice #${invoiceNumber}`
+
   await supabase
     .from('ar_transactions')
     .delete()
-    .eq('description', `weekly:${weeklyId}`)
+    .eq('customer_id', customerId)
+    .eq('description', weeklyInvDesc)
 
   await supabase
     .from('ar_transactions')
@@ -245,10 +250,9 @@ export async function generateWeeklyInvoice(
       type:         'invoice',
       amount:       totalAmount,
       due_date:     dueDateStr,
-      description:  `Weekly Invoice #${invoiceNumber}`,
+      description:  weeklyInvDesc,
       created_at:   new Date().toISOString(),
     })
-
   // ── 10. Recalculate customer balance ────────────────────────────────────
   const { data: allTx } = await supabase
     .from('ar_transactions')
