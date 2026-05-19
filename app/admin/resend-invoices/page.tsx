@@ -33,7 +33,7 @@ export default async function ResendInvoicesPage({
     .select('id, business_name, email')
     .order('business_name')
 
-  // ── Fetch invoiced orders for selected customer + date range ───
+    // ── Fetch invoiced orders for selected customer + date range ───
   let orders: any[] = []
   if (customerId) {
     const { data } = await supabase
@@ -48,13 +48,13 @@ export default async function ResendInvoicesPage({
       `)
       .eq('customer_id', customerId)
       .eq('status', 'invoiced')
+      .is('weekly_invoice_id', null)
       .gte('delivery_date', startDate)
       .lte('delivery_date', endDate)
       .order('delivery_date')
 
     orders = data ?? []
   }
-
   return (
     <ResendInvoicesView
       customers={customers ?? []}
