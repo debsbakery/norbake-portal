@@ -12,17 +12,6 @@ export interface OrderLineItem {
   gst_applicable:     boolean
 }
 
-export interface DayLine {
-  delivery_date:  string
-  total_amount:   number
-  orders: Array<{
-    order_id:       string
-    invoice_number: number | null
-    total_amount:   number
-    items:          OrderLineItem[]
-  }>
-}
-
 export interface WeeklyInvoiceData {
   weekly: {
     id:             string
@@ -43,7 +32,8 @@ export interface WeeklyInvoiceData {
     abn?:          string | null
     phone?:        string | null
   }
-  dayLines: DayLine[]
+  /** All line items for the entire week, flattened */
+  items: OrderLineItem[]
   bakery: {
     name:       string
     email:      string
@@ -75,7 +65,7 @@ function drawFallbackLogo(doc: jsPDF, color: [number, number, number], margin: n
 }
 
 export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise<jsPDF> {
-  const { weekly, customer, dayLines, bakery } = data
+  const { weekly, customer, items, bakery } = data
   const doc = new jsPDF()
 
   const logoColor: [number, number, number] = [62, 31, 0]
@@ -183,84 +173,49 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
     yPos += 5
   }
 
-  // ── Itemised table: grouped by delivery day ─────────────────────────────
+  // ── Single itemised table: all products for the week ────────────────────
   yPos = Math.max(yPos + 10, 120)
 
-  const tableBody: any[][] = []
-
-  for (const day of dayLines) {
-    const dateObj   = new Date(day.delivery_date + 'T00:00:00')
-    const dayName   = dateObj.toLocaleDateString('en-AU', { weekday: 'long' })
-    const dateLabel = dateObj.toLocaleDateString('en-AU')
-
-    // Day header row
-    tableBody.push([
-      { content: `${dayName} ${dateLabel}`, colSpan: 4, styles: {
-        fontStyle: 'bold',
-        fillColor: [220, 220, 220],
-        textColor: [0, 0, 0],
-        fontSize: 9,
-      }},
-    ])
-
-    // Collect ALL items across all orders for this day
-    const allDayItems: OrderLineItem[] = []
-    for (const order of day.orders) {
-      allDayItems.push(...order.items)
-    }
-
-    if (allDayItems.length > 0) {
-      // Merge duplicate products (same product appearing in multiple orders on same day)
-      const merged = new Map<string, OrderLineItem>()
-      for (const item of allDayItems) {
-        const key = (item.custom_description || item.product_name) + '|' + Number(item.unit_price).toFixed(2) + '|' + String(item.gst_applicable)
-        if (merged.has(key)) {
-          const existing = merged.get(key)!
-          existing.quantity += item.quantity
-          existing.subtotal = Math.round((existing.subtotal + item.subtotal) * 100) / 100
-        } else {
-          merged.set(key, { ...item })
-        }
-      }
-
-      for (const item of merged.values()) {
-        const name = item.custom_description || item.product_name
-        const gstTag = item.gst_applicable ? '' : ' *'
-        tableBody.push([
-          `   ${name}${gstTag}`,
-          String(item.quantity),
-          formatCurrency(item.unit_price),
-          formatCurrency(item.subtotal),
-        ])
-      }
+  // Merge duplicates: same product + same price = combine qty & subtotal
+  const merged = new Map<string, OrderLineItem>()
+  for (const item of items) {
+    const key = (item.custom_description || item.product_name) + '|' + Number(item.unit_price).toFixed(2) + '|' + String(item.gst_applicable)
+    if (merged.has(key)) {
+      const existing = merged.get(key)!
+      existing.quantity += item.quantity
+      existing.subtotal = Math.round((existing.subtotal + item.subtotal) * 100) / 100
     } else {
-      tableBody.push([
-        '   (no item detail)',
-        '',
-        '',
-        formatCurrency(day.total_amount),
-      ])
+      merged.set(key, { ...item })
     }
+  }
 
-    // Day subtotal row
-    tableBody.push([
-      { content: 'Day Total', colSpan: 3, styles: {
-        fontStyle: 'bold',
-        halign: 'right' as const,
-        fontSize: 7.5,
-      }},
-      { content: formatCurrency(day.total_amount), styles: {
-        fontStyle: 'bold',
-        halign: 'right' as const,
-        fontSize: 7.5,
-      }},
-    ])
+  // Sort alphabetically by product name
+  const sortedItems = Array.from(merged.values()).sort((a, b) => {
+    const nameA = (a.custom_description || a.product_name).toLowerCase()
+    const nameB = (b.custom_description || b.product_name).toLowerCase()
+    return nameA.localeCompare(nameB)
+  })
+
+  const tableData = sortedItems.map(item => {
+    const name = item.custom_description || item.product_name
+    const gstTag = item.gst_applicable ? '' : ' *'
+    return [
+      `${name}${gstTag}`,
+      String(item.quantity),
+      formatCurrency(item.unit_price),
+      formatCurrency(item.subtotal),
+    ]
+  })
+
+  // Fallback if no items
+  if (tableData.length === 0) {
+    tableData.push(['(no item detail available)', '', '', formatCurrency(weekly.total_amount)])
   }
 
   autoTable(doc, {
     startY: yPos,
     head: [['Item', 'Qty', 'Unit Price', 'Amount']],
-    body: tableBody,
+    body: tableData,
     theme: 'striped',
     headStyles: {
       fillColor: [0, 0, 0],
@@ -269,9 +224,9 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
       fontSize: 9,
     },
     bodyStyles: {
-      fontSize: 7.5,
+      fontSize: 8,
       textColor: [0, 0, 0],
-      cellPadding: 2,
+      cellPadding: 3,
     },
     columnStyles: {
       0: { cellWidth: 85 },
@@ -286,7 +241,7 @@ export async function generateWeeklyInvoicePDF(data: WeeklyInvoiceData): Promise
   // ── GST note ────────────────────────────────────────────────────────────
   const afterTableY = (doc as any).lastAutoTable.finalY + 4
 
-  const hasGstFreeItems = dayLines.some(d => d.orders.some(o => o.items.some(i => !i.gst_applicable)))
+  const hasGstFreeItems = sortedItems.some(i => !i.gst_applicable)
   if (hasGstFreeItems) {
     doc.setFontSize(7)
     doc.setFont('helvetica', 'italic')

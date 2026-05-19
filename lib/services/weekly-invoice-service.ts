@@ -341,9 +341,7 @@ export function buildDayLines(
   return Array.from(dayMap.values()).sort((a, b) => a.delivery_date.localeCompare(b.delivery_date))
 }
 
-/**
- * Send a weekly invoice email with PDF attachment.
- */
+
 export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
   const { Resend } = await import('resend')
   const { generateWeeklyInvoicePDF } = await import('@/lib/pdf/weekly-invoice-pdf')
@@ -362,7 +360,7 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
   if (wErr || !weekly) throw new Error(`Weekly invoice ${weeklyInvoiceId} not found`)
   if (!weekly.customer?.email) throw new Error(`No email for customer on weekly invoice ${weeklyInvoiceId}`)
 
-  // 2. Fetch linked orders
+  // 2. Fetch linked order IDs
   const { data: links } = await supabase
     .from('weekly_invoice_orders')
     .select('order_id')
@@ -370,48 +368,23 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
 
   const orderIds = (links ?? []).map((l: any) => l.order_id)
 
-  const { data: orders } = await supabase
-    .from('orders')
-    .select('id, delivery_date, invoice_number, total_amount')
-    .in('id', orderIds)
-    .order('delivery_date', { ascending: true })
-
-  // 3. Fetch ALL order items
+  // 3. Fetch ALL order items across all orders — one flat list
   const { data: allItems } = await supabase
     .from('order_items')
-    .select('order_id, product_name, custom_description, quantity, unit_price, subtotal, gst_applicable')
+    .select('product_name, custom_description, quantity, unit_price, subtotal, gst_applicable')
     .in('order_id', orderIds)
-    .order('created_at', { ascending: true })
+    .order('product_name', { ascending: true })
 
-  // Group items by order_id
-  const itemsByOrderId = new Map<string, OrderLineItem[]>()
-  for (const item of (allItems ?? [])) {
-    const orderId = item.order_id as string
-    if (!itemsByOrderId.has(orderId)) {
-      itemsByOrderId.set(orderId, [])
-    }
-    itemsByOrderId.get(orderId)!.push({
-      product_name:       item.product_name as string,
-      custom_description: item.custom_description as string | null,
-      quantity:           Number(item.quantity),
-      unit_price:         Number(item.unit_price),
-      subtotal:           Number(item.subtotal),
-      gst_applicable:     item.gst_applicable as boolean,
-    })
-  }
+  const items: OrderLineItem[] = (allItems ?? []).map((item: any) => ({
+    product_name:       item.product_name,
+    custom_description: item.custom_description,
+    quantity:           Number(item.quantity),
+    unit_price:         Number(item.unit_price),
+    subtotal:           Number(item.subtotal),
+    gst_applicable:     item.gst_applicable,
+  }))
 
-  // 4. Build dayLines GROUPED by date
-  const dayLines = buildDayLines(
-    (orders ?? []).map((o: any) => ({
-      id:             o.id,
-      delivery_date:  o.delivery_date,
-      invoice_number: o.invoice_number,
-      total_amount:   Number(o.total_amount || 0),
-    })),
-    itemsByOrderId
-  )
-
-  // 5. Build bakery details
+  // 4. Build bakery details
   const bakery = {
     name:        process.env.RESEND_FROM_NAME ?? 'Norbake',
     email:       process.env.RESEND_FROM_EMAIL ?? 'orders@norbakebroome.com',
@@ -423,7 +396,7 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
     bankAccount: process.env.NEXT_PUBLIC_BANK_ACCOUNT   ?? '',
   }
 
-  // 6. Generate PDF
+  // 5. Generate PDF
   const pdf = await generateWeeklyInvoicePDF({
     weekly: {
       id:             weekly.id,
@@ -444,52 +417,46 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
       phone:         weekly.customer?.phone,
       abn:           weekly.customer?.abn,
     },
-    dayLines,
+    items,
     bakery,
   })
 
   const pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
   const filename  = `weekly-invoice-${String(weekly.invoice_number).padStart(6, '0')}.pdf`
 
-  // 7. Send email — itemised HTML body
+  // 6. Build email HTML — simple item table
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'orders@norbakebroome.com'
   const fromName  = process.env.RESEND_FROM_NAME  ?? 'Norbake'
   const replyTo   = process.env.RESEND_REPLY_TO   ?? fromEmail
 
-  // Build HTML item summary grouped by day
-  let itemSummaryHtml = ''
-  for (const day of dayLines) {
-    const dateObj = new Date(day.delivery_date + 'T00:00:00')
-    const dayLabel = dateObj.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short' })
-    itemSummaryHtml += `<tr style="background:#e5e7eb;"><td colspan="4" style="padding:8px;font-weight:bold;">${dayLabel}</td></tr>`
+  // Merge items for email body (same logic as PDF)
+  const mergedForEmail = new Map<string, OrderLineItem>()
+  for (const item of items) {
+    const key = (item.custom_description || item.product_name) + '|' + Number(item.unit_price).toFixed(2) + '|' + String(item.gst_applicable)
+    if (mergedForEmail.has(key)) {
+      const existing = mergedForEmail.get(key)!
+      existing.quantity += item.quantity
+      existing.subtotal = Math.round((existing.subtotal + item.subtotal) * 100) / 100
+    } else {
+      mergedForEmail.set(key, { ...item })
+    }
+  }
 
-    // Merge items across orders for this day (same as PDF does)
-    const allDayItems: OrderLineItem[] = []
-    for (const order of day.orders) {
-      allDayItems.push(...order.items)
-    }
-    const merged = new Map<string, OrderLineItem>()
-    for (const item of allDayItems) {
-      const key = (item.custom_description || item.product_name) + '|' + Number(item.unit_price).toFixed(2) + '|' + String(item.gst_applicable)
-      if (merged.has(key)) {
-        const existing = merged.get(key)!
-        existing.quantity += item.quantity
-        existing.subtotal = Math.round((existing.subtotal + item.subtotal) * 100) / 100
-      } else {
-        merged.set(key, { ...item })
-      }
-    }
+  const sortedForEmail = Array.from(mergedForEmail.values()).sort((a, b) => {
+    const nameA = (a.custom_description || a.product_name).toLowerCase()
+    const nameB = (b.custom_description || b.product_name).toLowerCase()
+    return nameA.localeCompare(nameB)
+  })
 
-    for (const item of merged.values()) {
-      const name = item.custom_description || item.product_name
-      itemSummaryHtml += `<tr>
-        <td style="padding:4px 8px;">${name}</td>
-        <td style="padding:4px 8px;text-align:center;">${item.quantity}</td>
-        <td style="padding:4px 8px;text-align:right;">$${item.unit_price.toFixed(2)}</td>
-        <td style="padding:4px 8px;text-align:right;">$${item.subtotal.toFixed(2)}</td>
-      </tr>`
-    }
-    itemSummaryHtml += `<tr><td colspan="3" style="padding:4px 8px;text-align:right;font-weight:bold;">Day Total</td><td style="padding:4px 8px;text-align:right;font-weight:bold;">$${day.total_amount.toFixed(2)}</td></tr>`
+  let itemRowsHtml = ''
+  for (const item of sortedForEmail) {
+    const name = item.custom_description || item.product_name
+    itemRowsHtml += `<tr>
+      <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${name}</td>
+      <td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb;">${item.quantity}</td>
+      <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb;">$${item.unit_price.toFixed(2)}</td>
+      <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb;">$${item.subtotal.toFixed(2)}</td>
+    </tr>`
   }
 
   const { error: emailErr } = await resend.emails.send({
@@ -503,18 +470,17 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
         <p>Hi ${weekly.customer.business_name},</p>
         <p>Please find attached your weekly invoice for <strong>${weekly.week_start}</strong> to <strong>${weekly.week_end}</strong>.</p>
 
-        <h3 style="margin-top:20px;">Order Summary</h3>
-        <table style="width:100%;border-collapse:collapse;margin:10px 0;font-size:14px;">
+        <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
           <thead>
             <tr style="background:#000;color:#fff;">
               <th style="padding:8px;text-align:left;">Item</th>
               <th style="padding:8px;text-align:center;">Qty</th>
-              <th style="padding:8px;text-align:right;">Unit</th>
+              <th style="padding:8px;text-align:right;">Unit Price</th>
               <th style="padding:8px;text-align:right;">Amount</th>
             </tr>
           </thead>
           <tbody>
-            ${itemSummaryHtml}
+            ${itemRowsHtml}
           </tbody>
         </table>
 
@@ -552,7 +518,7 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string) {
 
   if (emailErr) throw new Error(`Email send failed: ${emailErr.message}`)
 
-  // 8. Update emailed_at
+  // 7. Update emailed_at
   await supabase
     .from('weekly_invoices')
     .update({ emailed_at: new Date().toISOString() })
