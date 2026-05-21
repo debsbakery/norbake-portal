@@ -46,8 +46,8 @@ interface Props {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const HOUR_START = 4   // 4 AM
-const HOUR_END = 22    // 10 PM
+const HOUR_START = 4    // 4 AM
+const HOUR_END = 22     // 10 PM
 const TOTAL_HOURS = HOUR_END - HOUR_START
 const SLOTS_PER_HOUR = 2  // 30 min slots
 const TOTAL_SLOTS = TOTAL_HOURS * SLOTS_PER_HOUR
@@ -56,13 +56,14 @@ const TIMELINE_WIDTH = TOTAL_SLOTS * SLOT_WIDTH
 const STAFF_COL_WIDTH = 160
 const WEEK_COL_WIDTH = 90
 const ROW_HEIGHT = 52
+const MAX_SECTIONS = 2  // max split shifts per person per day
 
 const DEPT_COLOURS: Record<string, { bg: string; border: string; text: string; barBg: string }> = {
   production: { bg: 'bg-amber-500', border: 'border-amber-600', text: 'text-white', barBg: '#f59e0b' },
   shop:       { bg: 'bg-blue-500',  border: 'border-blue-600',  text: 'text-white', barBg: '#3b82f6' },
   delivery:   { bg: 'bg-green-500', border: 'border-green-600', text: 'text-white', barBg: '#22c55e' },
   admin:      { bg: 'bg-gray-500',  border: 'border-gray-600',  text: 'text-white', barBg: '#6b7280' },
-  management: { bg: 'bg-purple-500',border: 'border-purple-600',text: 'text-white', barBg: '#a855f7' },
+  management: { bg: 'bg-purple-500', border: 'border-purple-600', text: 'text-white', barBg: '#a855f7' },
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -115,7 +116,7 @@ export default function RosterGrid({
     const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
       .toISOString().split('T')[0]
     const idx = weekDates.indexOf(today)
-    return idx >= 0 ? idx : 1 // Default to Monday if today isn't in this week
+    return idx >= 0 ? idx : 1
   })
   const [copying, setCopying] = useState(false)
   const [copyResult, setCopyResult] = useState<string | null>(null)
@@ -143,22 +144,31 @@ export default function RosterGrid({
   const timelineRef = useRef<HTMLDivElement>(null)
   const currentDate = weekDates[activeDay]
 
-  // ── Week calculations ──────────────────────────────────────────────────────
+  // ── Data helpers ───────────────────────────────────────────────────────────
   const weekLabel = (() => {
     const s = new Date(weekStart + 'T00:00:00')
     const e = new Date(weekDates[6] + 'T00:00:00')
     return `${s.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – ${e.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`
   })()
 
+  function getEntries(staffId: string, date: string): RosterEntry[] {
+    return localEntries
+      .filter(e => e.staff_id === staffId && e.work_date === date && e.status !== 'rostered_off')
+      .sort((a, b) => (a.section ?? 1) - (b.section ?? 1))
+  }
+
   function getEntry(staffId: string, date: string): RosterEntry | null {
-    return localEntries.find(
-      e => e.staff_id === staffId && e.work_date === date && e.section === 1
-    ) ?? null
+    return getEntries(staffId, date)[0] ?? null
+  }
+
+  function isRosteredOff(staffId: string, date: string): boolean {
+    return localEntries.some(
+      e => e.staff_id === staffId && e.work_date === date && e.status === 'rostered_off'
+    )
   }
 
   function staffDayHours(staffId: string, date: string): number {
-    const e = getEntry(staffId, date)
-    return e ? estimatedHours(e) : 0
+    return getEntries(staffId, date).reduce((sum, e) => sum + estimatedHours(e), 0)
   }
 
   function staffWeekHours(staffId: string): number {
@@ -167,10 +177,7 @@ export default function RosterGrid({
 
   function staffWeekCost(s: StaffMember): number {
     if (s.employment_type === 'salary') {
-      const daysWorked = weekDates.filter(d => {
-        const e = getEntry(s.id, d)
-        return e && e.status !== 'rostered_off' && e.status !== 'leave'
-      }).length
+      const daysWorked = weekDates.filter(d => getEntries(s.id, d).length > 0).length
       return daysWorked > 0 ? Number(s.salary_weekly ?? 0) : 0
     }
     const hrs = staffWeekHours(s.id)
@@ -183,10 +190,10 @@ export default function RosterGrid({
 
   function dayTotalCost(date: string): number {
     return staff.reduce((sum, s) => {
-      const e = getEntry(s.id, date)
-      if (!e || e.status === 'rostered_off') return sum
+      const ents = getEntries(s.id, date)
+      if (ents.length === 0) return sum
       if (s.employment_type === 'salary') return sum + Number(s.salary_weekly ?? 0) / 5
-      const hrs = estimatedHours(e)
+      const hrs = ents.reduce((h, e) => h + estimatedHours(e), 0)
       return sum + hrs * Number(s.true_hourly_cost ?? 0)
     }, 0)
   }
@@ -221,7 +228,8 @@ export default function RosterGrid({
 
   // ── Save entry via API ─────────────────────────────────────────────────────
   const saveEntry = useCallback(async (
-    staffId: string, date: string, startTime: string, endTime: string, existingId?: string
+    staffId: string, date: string, startTime: string, endTime: string,
+    existingId?: string, section?: number, department?: string
   ) => {
     setSaving(true)
     try {
@@ -236,21 +244,38 @@ export default function RosterGrid({
           setLocalEntries(prev => prev.map(e => e.id === existingId ? data.entry : e))
         }
       } else {
+        // Find next available section
+        const useSection = section ?? (() => {
+          const existing = localEntries.filter(
+            e => e.staff_id === staffId && e.work_date === date && e.status !== 'rostered_off'
+          )
+          const usedSections = existing.map(e => e.section)
+          for (let s = 1; s <= MAX_SECTIONS; s++) {
+            if (!usedSections.includes(s)) return s
+          }
+          return 1 // fallback overwrite section 1
+        })()
+
+        const payload: any = {
+          staff_id: staffId,
+          work_date: date,
+          section: useSection,
+          scheduled_start: startTime,
+          scheduled_end: endTime,
+        }
+        if (department) payload.department = department
+
         const res = await fetch('/api/admin/roster/entry', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            staff_id: staffId,
-            work_date: date,
-            section: 1,
-            scheduled_start: startTime,
-            scheduled_end: endTime,
-          }),
+          body: JSON.stringify(payload),
         })
         const data = await res.json()
         if (res.ok) {
           setLocalEntries(prev => {
-            const exists = prev.find(e => e.staff_id === staffId && e.work_date === date && e.section === 1)
+            const exists = prev.find(
+              e => e.staff_id === staffId && e.work_date === date && e.section === useSection
+            )
             if (exists) return prev.map(e => e.id === exists.id ? data.entry : e)
             return [...prev, data.entry]
           })
@@ -261,7 +286,7 @@ export default function RosterGrid({
     } finally {
       setSaving(false)
     }
-  }, [])
+  }, [localEntries])
 
   // ── Delete entry ───────────────────────────────────────────────────────────
   async function handleDelete(entryId: string) {
@@ -321,19 +346,17 @@ export default function RosterGrid({
       if (type === 'create') {
         finalStart = Math.min(startSlot, currentSlot)
         finalEnd = Math.max(startSlot, currentSlot)
-        if (finalEnd - finalStart < 1) finalEnd = finalStart + 2 // minimum 1 hour
+        if (finalEnd - finalStart < 1) finalEnd = finalStart + 2
       } else if (type === 'move') {
         const delta = currentSlot - startSlot
         finalStart = (originalStart ?? 0) + delta
         finalEnd = (originalEnd ?? 0) + delta
-        // Clamp
         if (finalStart < 0) { finalEnd -= finalStart; finalStart = 0 }
         if (finalEnd > TOTAL_SLOTS) { finalStart -= (finalEnd - TOTAL_SLOTS); finalEnd = TOTAL_SLOTS }
       } else if (type === 'resize-left') {
         finalStart = Math.min(currentSlot, (originalEnd ?? TOTAL_SLOTS) - 1)
         finalEnd = originalEnd ?? TOTAL_SLOTS
       } else {
-        // resize-right
         finalStart = originalStart ?? 0
         finalEnd = Math.max(currentSlot, (originalStart ?? 0) + 1)
       }
@@ -355,7 +378,7 @@ export default function RosterGrid({
     }
   }, [dragState, currentDate, getSlotFromX, saveEntry])
 
-  // ── Get visual bar position ────────────────────────────────────────────────
+  // ── Visual helpers ─────────────────────────────────────────────────────────
   function getBarForEntry(entry: RosterEntry): { left: number; width: number } | null {
     if (!entry.scheduled_start || !entry.scheduled_end) return null
     const startSlot = timeToSlot(entry.scheduled_start)
@@ -390,14 +413,10 @@ export default function RosterGrid({
     s = Math.max(0, s)
     e = Math.min(TOTAL_SLOTS, e)
 
-    return {
-      staffId,
-      left: s * SLOT_WIDTH,
-      width: Math.max((e - s) * SLOT_WIDTH, SLOT_WIDTH),
-    }
+    return { staffId, left: s * SLOT_WIDTH, width: Math.max((e - s) * SLOT_WIDTH, SLOT_WIDTH) }
   }
 
-  // ── Edit modal handlers ────────────────────────────────────────────────────
+  // ── Edit modal ─────────────────────────────────────────────────────────────
   function openEditModal(staffMember: StaffMember, entry: RosterEntry | null) {
     const dow = new Date(currentDate + 'T00:00:00').getDay()
     setEditEntry({ entry, staffId: staffMember.id, date: currentDate })
@@ -426,13 +445,23 @@ export default function RosterGrid({
           setLocalEntries(prev => prev.map(e => e.id === editEntry.entry!.id ? data.entry : e))
         }
       } else {
+        // Find next available section
+        const existing = localEntries.filter(
+          e => e.staff_id === editEntry.staffId && e.work_date === editEntry.date && e.status !== 'rostered_off'
+        )
+        const usedSections = existing.map(e => e.section)
+        let useSection = 1
+        for (let s = 1; s <= MAX_SECTIONS; s++) {
+          if (!usedSections.includes(s)) { useSection = s; break }
+        }
+
         const res = await fetch('/api/admin/roster/entry', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             staff_id: editEntry.staffId,
             work_date: editEntry.date,
-            section: 1,
+            section: useSection,
             ...editForm,
           }),
         })
@@ -440,7 +469,7 @@ export default function RosterGrid({
         if (res.ok) {
           setLocalEntries(prev => {
             const exists = prev.find(
-              e => e.staff_id === editEntry.staffId && e.work_date === editEntry.date && e.section === 1
+              e => e.staff_id === editEntry.staffId && e.work_date === editEntry.date && e.section === useSection
             )
             if (exists) return prev.map(e => e.id === exists.id ? data.entry : e)
             return [...prev, data.entry]
@@ -554,7 +583,7 @@ export default function RosterGrid({
         })}
       </div>
 
-      {/* ── Saving indicator ── */}
+      {/* Saving indicator */}
       {saving && (
         <div className="mb-2 text-xs text-amber-600 font-medium flex items-center gap-1">
           <div className="w-3 h-3 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
@@ -568,15 +597,13 @@ export default function RosterGrid({
 
           {/* Staff column (sticky left) */}
           <div className="flex-shrink-0 z-20 bg-white border-r" style={{ width: STAFF_COL_WIDTH }}>
-            {/* Header */}
             <div className="h-10 border-b bg-gray-50 flex items-center px-3">
               <span className="text-xs font-semibold text-gray-600">Staff</span>
             </div>
-            {/* Staff rows */}
             {staff.map(s => {
               const dept = DEPT_COLOURS[s.primary_department] ?? DEPT_COLOURS.admin
               return (
-                <div key={s.id} className="border-b flex items-center px-3 hover:bg-gray-50 group"
+                <div key={s.id} className="border-b flex items-center px-3 hover:bg-gray-50"
                   style={{ height: ROW_HEIGHT }}>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
@@ -607,23 +634,28 @@ export default function RosterGrid({
 
               {/* Staff rows with timeline */}
               {staff.map(s => {
-                const entry = getEntry(s.id, currentDate)
-                const bar = entry ? getBarForEntry(entry) : null
-                const isOff = entry?.status === 'rostered_off'
-                const dept = DEPT_COLOURS[entry?.department ?? s.primary_department] ?? DEPT_COLOURS.admin
+                const staffEntries = getEntries(s.id, currentDate)
+                const off = isRosteredOff(s.id, currentDate)
+                const dept = DEPT_COLOURS[s.primary_department] ?? DEPT_COLOURS.admin
                 const showDrag = dragPreview && dragPreview.staffId === s.id
 
                 return (
                   <div key={s.id} className="border-b relative group"
                     style={{ height: ROW_HEIGHT }}
                     onMouseDown={(e) => {
-                      // Only create if clicking empty area (not on bar)
+                      // Don't create if clicking on a bar
                       if ((e.target as HTMLElement).dataset.bar) return
-                      if (!bar || isOff) {
+                      if ((e.target as HTMLElement).closest('[data-bar]')) return
+                      // Allow creating if under max sections
+                      if (!off && staffEntries.length < MAX_SECTIONS) {
                         handleMouseDown(e, s.id, 'create')
                       }
                     }}
-                    onDoubleClick={() => openEditModal(s, entry)}>
+                    onDoubleClick={(e) => {
+                      if ((e.target as HTMLElement).dataset.bar) return
+                      if ((e.target as HTMLElement).closest('[data-bar]')) return
+                      openEditModal(s, null)
+                    }}>
 
                     {/* Background grid lines */}
                     <div className="absolute inset-0 flex pointer-events-none">
@@ -638,7 +670,9 @@ export default function RosterGrid({
                     {/* Current time indicator */}
                     {currentDate === todayStr && (() => {
                       const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
-                      const nowSlot = timeToSlot(`${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`)
+                      const nowSlot = timeToSlot(
+                        `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+                      )
                       if (nowSlot >= 0 && nowSlot <= TOTAL_SLOTS) {
                         return (
                           <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10 pointer-events-none"
@@ -648,65 +682,76 @@ export default function RosterGrid({
                       return null
                     })()}
 
-                    {/* Shift bar */}
-                    {bar && !isOff && !showDrag && (
-                      <div
-                        data-bar="true"
-                        className="absolute top-1.5 bottom-1.5 rounded-lg shadow-sm flex items-center cursor-move
-                                   transition-shadow hover:shadow-md group/bar select-none overflow-hidden"
-                        style={{
-                          left: bar.left,
-                          width: bar.width,
-                          backgroundColor: dept.barBg,
-                        }}
-                        onMouseDown={(e) => {
-                          e.stopPropagation()
-                          const startSlot = timeToSlot(entry!.scheduled_start!)
-                          const endSlot = timeToSlot(entry!.scheduled_end!)
-                          handleMouseDown(e, s.id, 'move', entry!.id, startSlot, endSlot)
-                        }}
-                        onDoubleClick={(e) => {
-                          e.stopPropagation()
-                          openEditModal(s, entry)
-                        }}>
-
-                        {/* Left resize handle */}
+                    {/* Shift bars — multiple per row for split shifts */}
+                    {!off && !showDrag && staffEntries.map(entry => {
+                      const bar = getBarForEntry(entry)
+                      if (!bar) return null
+                      const eDept = DEPT_COLOURS[entry.department ?? s.primary_department] ?? DEPT_COLOURS.admin
+                      return (
                         <div
-                          className="absolute left-0 top-0 bottom-0 w-2 cursor-w-resize
-                                     hover:bg-white/30 transition-colors rounded-l-lg"
+                          key={entry.id}
+                          data-bar="true"
+                          className="absolute top-1.5 bottom-1.5 rounded-lg shadow-sm flex items-center cursor-move
+                                     transition-shadow hover:shadow-md select-none overflow-hidden"
+                          style={{
+                            left: bar.left,
+                            width: bar.width,
+                            backgroundColor: eDept.barBg,
+                          }}
                           onMouseDown={(e) => {
                             e.stopPropagation()
-                            const startSlot = timeToSlot(entry!.scheduled_start!)
-                            const endSlot = timeToSlot(entry!.scheduled_end!)
-                            handleMouseDown(e, s.id, 'resize-left', entry!.id, startSlot, endSlot)
+                            const startSlot = timeToSlot(entry.scheduled_start!)
+                            const endSlot = timeToSlot(entry.scheduled_end!)
+                            handleMouseDown(e, s.id, 'move', entry.id, startSlot, endSlot)
                           }}
-                        />
+                          onDoubleClick={(e) => {
+                            e.stopPropagation()
+                            openEditModal(s, entry)
+                          }}>
 
-                        {/* Label */}
-                        <div className="flex-1 px-2 flex items-center gap-2 min-w-0 pointer-events-none">
-                          <span className="text-xs font-bold text-white truncate">
-                            {fmtTimeShort(entry!.scheduled_start!)} – {fmtTimeShort(entry!.scheduled_end!)}
-                          </span>
-                          {bar.width > 120 && (
-                            <span className="text-xs text-white/80 truncate">
-                              {estimatedHours(entry!).toFixed(1)}h
+                          {/* Left resize handle */}
+                          <div
+                            className="absolute left-0 top-0 bottom-0 w-2 cursor-w-resize
+                                       hover:bg-white/30 transition-colors rounded-l-lg"
+                            onMouseDown={(e) => {
+                              e.stopPropagation()
+                              const startSlot = timeToSlot(entry.scheduled_start!)
+                              const endSlot = timeToSlot(entry.scheduled_end!)
+                              handleMouseDown(e, s.id, 'resize-left', entry.id, startSlot, endSlot)
+                            }}
+                          />
+
+                          {/* Label */}
+                          <div className="flex-1 px-2 flex items-center gap-2 min-w-0 pointer-events-none">
+                            <span className="text-xs font-bold text-white truncate">
+                              {fmtTimeShort(entry.scheduled_start!)} – {fmtTimeShort(entry.scheduled_end!)}
                             </span>
-                          )}
-                        </div>
+                            {bar.width > 100 && (
+                              <span className="text-xs text-white/80 truncate">
+                                {estimatedHours(entry).toFixed(1)}h
+                              </span>
+                            )}
+                            {bar.width > 150 && entry.department !== s.primary_department && (
+                              <span className="text-xs text-white/70 truncate capitalize">
+                                ({entry.department})
+                              </span>
+                            )}
+                          </div>
 
-                        {/* Right resize handle */}
-                        <div
-                          className="absolute right-0 top-0 bottom-0 w-2 cursor-e-resize
-                                     hover:bg-white/30 transition-colors rounded-r-lg"
-                          onMouseDown={(e) => {
-                            e.stopPropagation()
-                            const startSlot = timeToSlot(entry!.scheduled_start!)
-                            const endSlot = timeToSlot(entry!.scheduled_end!)
-                            handleMouseDown(e, s.id, 'resize-right', entry!.id, startSlot, endSlot)
-                          }}
-                        />
-                      </div>
-                    )}
+                          {/* Right resize handle */}
+                          <div
+                            className="absolute right-0 top-0 bottom-0 w-2 cursor-e-resize
+                                       hover:bg-white/30 transition-colors rounded-r-lg"
+                            onMouseDown={(e) => {
+                              e.stopPropagation()
+                              const startSlot = timeToSlot(entry.scheduled_start!)
+                              const endSlot = timeToSlot(entry.scheduled_end!)
+                              handleMouseDown(e, s.id, 'resize-right', entry.id, startSlot, endSlot)
+                            }}
+                          />
+                        </div>
+                      )
+                    })}
 
                     {/* Drag preview */}
                     {showDrag && (
@@ -727,19 +772,26 @@ export default function RosterGrid({
                       </div>
                     )}
 
-                    {/* Rostered off indicator */}
-                    {isOff && (
-                      <div className="absolute inset-x-4 top-1/2 -translate-y-1/2
-                                      text-center text-xs text-gray-400 italic">
+                    {/* Rostered off */}
+                    {off && (
+                      <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-xs text-gray-400 italic">
                         Rostered Off
                       </div>
                     )}
 
-                    {/* Empty state — hint text */}
-                    {!entry && !isOff && !showDrag && (
+                    {/* Empty hint */}
+                    {staffEntries.length === 0 && !off && !showDrag && (
                       <div className="absolute inset-0 flex items-center justify-center
                                       opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                         <span className="text-xs text-gray-300">Click & drag to add shift</span>
+                      </div>
+                    )}
+
+                    {/* Split shift hint — show when 1 shift exists */}
+                    {staffEntries.length === 1 && !off && !showDrag && (
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2
+                                      opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                        <span className="text-[10px] text-gray-300 bg-white/80 px-1 rounded">+ drag for split</span>
                       </div>
                     )}
                   </div>
@@ -768,7 +820,7 @@ export default function RosterGrid({
         </div>
       </div>
 
-      {/* ── Legend + Tips ── */}
+      {/* ── Legend ── */}
       <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-gray-500">
         <div className="flex items-center gap-4">
           {Object.entries(DEPT_COLOURS).map(([key, val]) => (
@@ -780,41 +832,61 @@ export default function RosterGrid({
         </div>
         <div className="flex items-center gap-1 ml-auto text-gray-400">
           <span>💡</span>
-          <span>Click & drag to create · Drag bar to move · Drag edges to resize · Double-click to edit details</span>
+          <span>Drag to create · Drag bar to move · Drag edges to resize · Double-click to edit · Split shifts: drag empty space for 2nd block</span>
         </div>
       </div>
 
-      {/* ── Mobile Fallback (card view) ── */}
+      {/* ── Mobile Fallback ── */}
       <div className="md:hidden mt-6">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">
           {DAY_LABELS[activeDay]} – {new Date(currentDate + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
         </h3>
         <div className="space-y-2">
           {staff.map(s => {
-            const entry = getEntry(s.id, currentDate)
-            const dept = DEPT_COLOURS[entry?.department ?? s.primary_department] ?? DEPT_COLOURS.admin
-            const isOff = !entry || entry.status === 'rostered_off'
+            const staffEntries = getEntries(s.id, currentDate)
+            const off = isRosteredOff(s.id, currentDate)
+            const dept = DEPT_COLOURS[s.primary_department] ?? DEPT_COLOURS.admin
             return (
-              <div key={s.id}
-                className="bg-white rounded-lg shadow p-3 flex items-center justify-between"
-                onClick={() => openEditModal(s, entry)}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-2 h-8 rounded-full ${dept.bg}`} />
-                  <div>
-                    <p className="text-sm font-medium">{s.name}</p>
-                    {isOff ? (
-                      <p className="text-xs text-gray-400 italic">Off</p>
-                    ) : entry?.scheduled_start && entry?.scheduled_end ? (
-                      <p className="text-xs text-gray-500">
-                        {fmtTimeShort(entry.scheduled_start)} – {fmtTimeShort(entry.scheduled_end)}
-                        <span className="ml-2 text-amber-600">{estimatedHours(entry).toFixed(1)}h</span>
-                      </p>
-                    ) : (
-                      <p className="text-xs text-gray-400">No shift</p>
-                    )}
+              <div key={s.id} className="bg-white rounded-lg shadow p-3"
+                onClick={() => openEditModal(s, staffEntries[0] ?? null)}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2 h-8 rounded-full ${dept.bg}`} />
+                    <div>
+                      <p className="text-sm font-medium">{s.name}</p>
+                      {off ? (
+                        <p className="text-xs text-gray-400 italic">Off</p>
+                      ) : staffEntries.length === 0 ? (
+                        <p className="text-xs text-gray-400">No shift</p>
+                      ) : (
+                        staffEntries.map((entry, i) => {
+                          const eDept = DEPT_COLOURS[entry.department] ?? dept
+                          return (
+                            <div key={entry.id} className="flex items-center gap-1.5">
+                              {staffEntries.length > 1 && (
+                                <span className={`inline-block w-1.5 h-1.5 rounded-full ${eDept.bg}`} />
+                              )}
+                              <p className="text-xs text-gray-500">
+                                {entry.scheduled_start && entry.scheduled_end ? (
+                                  <>
+                                    {fmtTimeShort(entry.scheduled_start)} – {fmtTimeShort(entry.scheduled_end)}
+                                    <span className="ml-1 text-amber-600">{estimatedHours(entry).toFixed(1)}h</span>
+                                    {entry.department !== s.primary_department && (
+                                      <span className="ml-1 text-gray-400 capitalize">({entry.department})</span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span className="text-gray-400">No times</span>
+                                )}
+                              </p>
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
                   </div>
+                  <ChevronRight className="h-4 w-4 text-gray-300" />
                 </div>
-                <ChevronRight className="h-4 w-4 text-gray-300" />
               </div>
             )
           })}
@@ -837,6 +909,9 @@ export default function RosterGrid({
                   {new Date(editEntry.date + 'T00:00:00').toLocaleDateString('en-AU', {
                     weekday: 'short', day: 'numeric', month: 'short',
                   })}
+                  {editEntry.entry && editEntry.entry.section > 1 && (
+                    <span className="ml-1 text-amber-600 font-medium">(Split #{editEntry.entry.section})</span>
+                  )}
                 </p>
               </div>
               <button onClick={() => setEditEntry(null)} className="p-1.5 hover:bg-gray-100 rounded-lg">
@@ -845,17 +920,17 @@ export default function RosterGrid({
             </div>
 
             <div className="p-5 space-y-4">
-              {/* Department */}
+              {/* Department — key for split shifts */}
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Department</label>
                 <select value={editForm.department}
                   onChange={e => setEditForm((p: any) => ({ ...p, department: e.target.value }))}
                   className={inp}>
-                  <option value="production">Production</option>
-                  <option value="shop">Shop</option>
-                  <option value="delivery">Delivery</option>
-                  <option value="admin">Admin</option>
-                  <option value="management">Management</option>
+                  <option value="production">🍞 Production</option>
+                  <option value="shop">🏪 Shop</option>
+                  <option value="delivery">🚚 Delivery</option>
+                  <option value="admin">📋 Admin</option>
+                  <option value="management">👔 Management</option>
                 </select>
               </div>
 
