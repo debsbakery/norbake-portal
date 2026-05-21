@@ -491,18 +491,19 @@ export default function RosterGrid({
   const inp = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-full">
-
+    <div className="container mx-auto px-2 py-2 max-w-full">
          {/* ── Header ── */}
-      <div className="sticky top-0 z-30 bg-gray-50 -mx-4 px-4 py-3 flex items-center justify-between mb-4 flex-wrap gap-3 border-b">
+      <div className="sticky top-0 z-30 bg-gray-50 -mx-4 px-4 py-2 flex items-center justify-between mb-2 flex-wrap gap-2 border-b">
               <div className="flex items-center gap-3">
           <a href="/admin" className="p-2 border rounded-lg hover:bg-gray-50 transition-colors">
             <ChevronLeft className="h-5 w-5" />
           </a>
-          <Calendar className="h-7 w-7 text-amber-700" />
+                    <Calendar className="h-5 w-5 text-amber-700" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Roster</h1>
-            <p className="text-sm text-gray-500">{weekLabel}</p>
+            <h1 className="text-lg font-bold text-gray-900">Roster</h1>
+            <p className="text-xs text-gray-500">
+              {weekLabel} · {totalWeeklyHours.toFixed(1)}h · ${totalWeeklyCost.toFixed(0)}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -538,37 +539,18 @@ export default function RosterGrid({
         </div>
       )}
 
-      {/* ── Summary Cards ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <div className="bg-white rounded-lg shadow p-3">
-          <p className="text-xs text-gray-500 flex items-center gap-1"><Users className="h-3 w-3" /> Staff</p>
-          <p className="text-xl font-bold">{staff.length}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-3">
-          <p className="text-xs text-gray-500 flex items-center gap-1"><DollarSign className="h-3 w-3" /> Est. Weekly</p>
-          <p className="text-xl font-bold text-amber-700">${totalWeeklyCost.toFixed(0)}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-3">
-          <p className="text-xs text-gray-500 flex items-center gap-1"><Clock className="h-3 w-3" /> Week Hours</p>
-          <p className="text-xl font-bold">{totalWeeklyHours.toFixed(1)}h</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-3">
-          <p className="text-xs text-gray-500 flex items-center gap-1"><Clock className="h-3 w-3" /> Today Cost</p>
-          <p className="text-xl font-bold text-green-700">${dayTotalCost(currentDate).toFixed(0)}</p>
-        </div>
-      </div>
-
       {/* ── Day Tabs ── */}
-      <div className="flex gap-1 mb-4 overflow-x-auto pb-1">
-        {weekDates.map((date, i) => {
+        <div className="flex gap-1 mb-2 overflow-x-auto pb-1">
+          {weekDates.map((date, i) => {
           const isToday = date === todayStr
           const isActive = i === activeDay
           const hrs = dayTotalHours(date)
           const cost = dayTotalCost(date)
           return (
             <button key={date} onClick={() => setActiveDay(i)}
-              className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-all
-                ${isActive
+              className={`flex-shrink-0 px-3 py-1 rounded-lg text-xs font-medium transition-all
+
+            ${isActive
                   ? 'bg-amber-700 text-white shadow-md'
                   : isToday
                     ? 'bg-amber-100 text-amber-800 border-2 border-amber-300'
