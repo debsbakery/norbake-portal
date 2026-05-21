@@ -277,8 +277,8 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
   const inp = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500'
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
-      {/* Header */}
+    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
+    {/* Header */}
       <div className="flex items-center gap-2 px-2 py-1 bg-stone-50 border-b flex-shrink-0 flex-wrap">
         <a href="/admin" className="p-1 border rounded hover:bg-gray-100"><ChevronLeft className="h-4 w-4" /></a>
         <span className="text-sm font-bold">Roster</span>
