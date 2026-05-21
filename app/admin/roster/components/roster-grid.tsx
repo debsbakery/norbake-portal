@@ -495,7 +495,10 @@ export default function RosterGrid({
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3">
+          <a href="/admin" className="p-2 border rounded-lg hover:bg-gray-50 transition-colors">
+            <ChevronLeft className="h-5 w-5" />
+          </a>
           <Calendar className="h-7 w-7 text-amber-700" />
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Roster</h1>
