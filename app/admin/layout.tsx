@@ -6,8 +6,7 @@ export default function AdminLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="bg-stone-50 min-h-[calc(100vh-4rem)]">
-      {children}
+    <div className="bg-stone-50 min-h-screen">      {children}
     </div>
   );
 }
