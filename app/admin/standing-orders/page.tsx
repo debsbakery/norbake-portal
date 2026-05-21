@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { redirect } from "next/navigation"
-import { createAdminClient } from "@/lib/supabase/admin"import { checkAdmin } from "@/lib/auth"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { checkAdmin } from "@/lib/auth"
 import { ArrowLeft, Calendar, Plus, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import {
