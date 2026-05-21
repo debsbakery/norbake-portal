@@ -1,5 +1,6 @@
+
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from "@/lib/supabase/server";
+import { checkAdmin } from '@/lib/auth';
 
 // ── Category ranges ───────────────────────────────────────────────────────────
 const CATEGORIES = [
@@ -10,17 +11,7 @@ const CATEGORIES = [
   { label: 'Pies (3750-4000)',  min: 3750, max: 4000  },
 ]
 
-async function checkAdmin() {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return false;
-    const adminEmails = ['orders@norbakebroome.com', 'admin@allstarsbakery.com'];
-    return adminEmails.includes(user.email?.toLowerCase() || '');
-  } catch {
-    return false;
-  }
-}
+
 
 function getBrisbaneDate(): string {
   const now      = new Date();
@@ -149,8 +140,10 @@ async function getCombinedForecast(dates: string[], supabase: any) {
 }
 
 export async function GET(request: NextRequest) {
-  const isAdmin = await checkAdmin();
-  if (!isAdmin) return new NextResponse('Unauthorized', { status: 401 });
+ if (!(await checkAdmin())) {
+  return new NextResponse('Unauthorized', { status: 401 });
+}
+ { status: 401 };
 
   const { searchParams } = new URL(request.url);
   const autoPrint = searchParams.get('autoprint') === '1';
