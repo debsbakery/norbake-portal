@@ -276,43 +276,106 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
   const dragPreview = getDragPreview()
   const inp = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500'
 
-  return (
+    return (
     <div className="fixed inset-0 flex flex-col bg-stone-50 z-40">
-    {/* Header */}
-      <div className="flex items-center gap-2 px-2 py-1 bg-stone-50 border-b flex-shrink-0 flex-wrap">
-        <a href="/admin" className="p-1 border rounded hover:bg-gray-100"><ChevronLeft className="h-4 w-4" /></a>
-        <span className="text-sm font-bold">Roster</span>
-        <span className="text-xs text-gray-400 hidden sm:inline">{weekLabel} · {totalWeeklyHours.toFixed(1)}h · ${totalWeeklyCost.toFixed(0)}</span>
+
+      {/* ── Header Row 1: Title + Navigation ── */}
+      <div className="flex items-center gap-3 px-3 py-1.5 bg-white border-b flex-shrink-0 shadow-sm">
+        <a href="/admin" className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+          <ChevronLeft className="h-4 w-4 text-gray-600" />
+        </a>
+        <div className="flex items-center gap-2">
+          <span className="text-base font-bold text-gray-900">📅 Roster</span>
+          <span className="text-xs text-gray-400 hidden sm:inline">
+            {weekLabel}
+          </span>
+        </div>
+
         <div className="flex-1" />
-        {weekDates.map((date, i) => (
-          <button key={date} onClick={() => setActiveDay(i)} className={`px-2 py-0.5 rounded text-xs font-medium ${i === activeDay ? 'bg-amber-700 text-white' : date === todayStr ? 'bg-amber-100 text-amber-800' : 'text-gray-500 hover:bg-gray-100'}`}>{DAY_LABELS[i]}</button>
-        ))}
-        <div className="flex-1" />
-        <a href={`/admin/roster?week=${prevWeek}`} className="p-1 border rounded hover:bg-gray-100"><ChevronLeft className="h-4 w-4" /></a>
-        <a href={`/admin/roster?week=${nextWeek}`} className="p-1 border rounded hover:bg-gray-100"><ChevronRight className="h-4 w-4" /></a>
-        <button onClick={handleCopyLastWeek} disabled={copying} className="px-2 py-1 bg-amber-700 text-white rounded text-xs hover:bg-amber-800 disabled:opacity-50">{copying ? '...' : 'Copy Wk'}</button>
-        <a href="/admin/staff" className="px-2 py-1 border rounded text-xs hover:bg-gray-100">Staff</a>
-        {saving && <div className="w-3 h-3 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />}
+
+        {/* Week navigation */}
+        <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-0.5">
+          <a href={`/admin/roster?week=${prevWeek}`} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm transition-all">
+            <ChevronLeft className="h-3.5 w-3.5 text-gray-500" />
+          </a>
+          <span className="text-xs font-medium text-gray-600 px-1">Week</span>
+          <a href={`/admin/roster?week=${nextWeek}`} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm transition-all">
+            <ChevronRight className="h-3.5 w-3.5 text-gray-500" />
+          </a>
+        </div>
+
+        <button onClick={handleCopyLastWeek} disabled={copying}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-700 text-white rounded-lg text-xs font-medium hover:bg-amber-800 disabled:opacity-50 transition-colors shadow-sm">
+          <Copy className="h-3 w-3" />
+          {copying ? 'Copying…' : 'Copy Last Week'}
+        </button>
+
+        <a href="/admin/staff" className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+          <Users className="h-3 w-3" />Staff
+        </a>
+
+        {saving && <div className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />}
       </div>
 
+      {/* ── Header Row 2: Day Tabs + Stats ── */}
+      <div className="flex items-center gap-1 px-3 py-1.5 bg-white border-b flex-shrink-0">
+        {weekDates.map((date, i) => {
+          const isToday = date === todayStr
+          const isActive = i === activeDay
+          const dayDate = new Date(date + 'T00:00:00')
+          return (
+            <button key={date} onClick={() => setActiveDay(i)}
+              className={`flex-1 py-1.5 rounded-lg text-center transition-all ${
+                isActive
+                  ? 'bg-amber-700 text-white shadow-md'
+                  : isToday
+                    ? 'bg-amber-50 text-amber-800 ring-2 ring-amber-300'
+                    : 'text-gray-500 hover:bg-gray-50'
+              }`}>
+              <div className="text-[11px] font-bold">{DAY_LABELS[i]}</div>
+              <div className={`text-[10px] ${isActive ? 'text-amber-200' : 'text-gray-400'}`}>
+                {dayDate.getDate()}
+              </div>
+            </button>
+          )
+        })}
+        <div className="w-px h-6 bg-gray-200 mx-1" />
+        <div className="text-center px-2">
+          <div className="text-[10px] text-gray-400">Week</div>
+          <div className="text-xs font-bold text-gray-900">{totalWeeklyHours.toFixed(1)}h</div>
+          <div className="text-[10px] text-amber-600 font-medium">${totalWeeklyCost.toFixed(0)}</div>
+        </div>
+      </div>
+
+      {/* Copy result */}
       {copyResult && (
-        <div className={`px-2 py-1 text-xs flex-shrink-0 flex justify-between ${copyResult.includes('Copied') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'}`}>
-          {copyResult}<button onClick={() => setCopyResult(null)} className="ml-2">✕</button>
+        <div className={`px-3 py-1.5 text-xs flex-shrink-0 flex items-center justify-between ${
+          copyResult.includes('Copied') ? 'bg-green-50 text-green-700 border-b border-green-200' : 'bg-red-50 text-red-700 border-b border-red-200'
+        }`}>
+          <span>{copyResult}</span>
+          <button onClick={() => setCopyResult(null)} className="ml-2 hover:opacity-60">✕</button>
         </div>
       )}
 
-      {/* Timeline */}
+      {/* ── Timeline ── */}
       <div className="flex-1 overflow-hidden flex">
+
         {/* Staff names */}
         <div className="flex-shrink-0 bg-white border-r overflow-hidden" style={{ width: STAFF_COL_WIDTH }}>
-          <div className="h-8 border-b bg-gray-50 flex items-center px-2"><span className="text-xs font-semibold text-gray-500">Staff</span></div>
-          {staff.map(s => {
+          <div className="h-8 border-b bg-gray-50 flex items-center px-3">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Staff</span>
+          </div>
+          {staff.map((s, idx) => {
             const dept = DEPT_COLOURS[s.primary_department] ?? DEPT_COLOURS.admin
             return (
-              <div key={s.id} className="border-b flex items-center px-2" style={{ height: ROW_HEIGHT }}>
+              <div key={s.id} className={`border-b flex items-center px-3 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
+                style={{ height: ROW_HEIGHT }}>
                 <div className="min-w-0">
-                  <p className="text-xs font-medium text-gray-900 truncate">{s.name}</p>
-                  <div className="flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full ${dept.bg}`} /><span className="text-[10px] text-gray-400 capitalize">{s.primary_department}</span></div>
+                  <p className="text-xs font-semibold text-gray-900 truncate">{s.name}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className={`w-2 h-2 rounded-full ${dept.bg}`} />
+                    <span className="text-[10px] text-gray-400 capitalize">{s.primary_department}</span>
+                  </div>
                 </div>
               </div>
             )
@@ -322,58 +385,108 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
         {/* Timeline area */}
         <div className="flex-1 overflow-x-auto overflow-y-hidden" ref={timelineRef}>
           <div style={{ width: TIMELINE_WIDTH, minWidth: '100%' }}>
+            {/* Hour headers */}
             <div className="h-8 border-b bg-gray-50 flex">
               {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-                <div key={i} className="flex-shrink-0 border-l border-gray-200 flex items-end px-1 pb-0.5" style={{ width: SLOT_WIDTH * SLOTS_PER_HOUR }}>
-                  <span className="text-[10px] text-gray-400">{slotToLabel(i * SLOTS_PER_HOUR)}</span>
+                <div key={i} className="flex-shrink-0 border-l border-gray-200 flex items-end px-1 pb-0.5"
+                  style={{ width: SLOT_WIDTH * SLOTS_PER_HOUR }}>
+                  <span className="text-[10px] text-gray-400 font-medium">{slotToLabel(i * SLOTS_PER_HOUR)}</span>
                 </div>
               ))}
             </div>
-            {staff.map(s => {
+
+            {/* Staff rows */}
+            {staff.map((s, idx) => {
               const staffEntries = getEntries(s.id, currentDate)
               const off = isRosteredOff(s.id, currentDate)
               const dept = DEPT_COLOURS[s.primary_department] ?? DEPT_COLOURS.admin
               const showDrag = dragPreview && dragPreview.staffId === s.id
               return (
-                <div key={s.id} className="border-b relative group" style={{ height: ROW_HEIGHT }}
+                <div key={s.id} className={`border-b relative group ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
+                  style={{ height: ROW_HEIGHT }}
                   onMouseDown={(e) => {
                     if ((e.target as HTMLElement).closest('[data-bar]')) return
                     if (!off && staffEntries.length < MAX_SECTIONS) handleMouseDown(e, s.id, 'create')
                   }}
                   onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest('[data-bar]')) openEditModal(s, null) }}>
+
+                  {/* Grid lines */}
                   <div className="absolute inset-0 flex pointer-events-none">
                     {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-                      <div key={i} className="flex-shrink-0 border-l border-gray-100" style={{ width: SLOT_WIDTH * SLOTS_PER_HOUR }} />
+                      <div key={i} className="flex-shrink-0 border-l border-gray-100/80" style={{ width: SLOT_WIDTH * SLOTS_PER_HOUR }} />
                     ))}
                   </div>
+
+                  {/* Current time line */}
                   {currentDate === todayStr && (() => {
                     const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
                     const ns = timeToSlot(`${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`)
-                    return ns > 0 && ns < TOTAL_SLOTS ? <div className="absolute top-0 bottom-0 w-0.5 bg-red-400 z-10 pointer-events-none" style={{ left: ns * SLOT_WIDTH }} /> : null
+                    return ns > 0 && ns < TOTAL_SLOTS ? (
+                      <div className="absolute top-0 bottom-0 z-10 pointer-events-none" style={{ left: ns * SLOT_WIDTH - 1 }}>
+                        <div className="w-0.5 h-full bg-red-400" />
+                        <div className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-red-400 rounded-full" />
+                      </div>
+                    ) : null
                   })()}
+
+                  {/* Shift bars */}
                   {!off && !showDrag && staffEntries.map(entry => {
                     const bar = getBarForEntry(entry)
                     if (!bar) return null
                     const eDept = DEPT_COLOURS[entry.department ?? s.primary_department] ?? DEPT_COLOURS.admin
                     return (
-                      <div key={entry.id} data-bar="true" className="absolute top-1 bottom-1 rounded-md shadow-sm flex items-center cursor-move hover:shadow-md select-none overflow-hidden"
+                      <div key={entry.id} data-bar="true"
+                        className="absolute top-1.5 bottom-1.5 rounded-lg shadow-sm flex items-center cursor-move
+                                   hover:shadow-md hover:brightness-110 select-none overflow-hidden transition-all"
                         style={{ left: bar.left, width: bar.width, backgroundColor: eDept.barBg }}
                         onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, s.id, 'move', entry.id, timeToSlot(entry.scheduled_start!), timeToSlot(entry.scheduled_end!)) }}
                         onDoubleClick={(e) => { e.stopPropagation(); openEditModal(s, entry) }}>
-                        <div className="absolute left-0 top-0 bottom-0 w-2 cursor-w-resize hover:bg-white/30 rounded-l-md"
+
+                        <div className="absolute left-0 top-0 bottom-0 w-2.5 cursor-w-resize hover:bg-white/30 rounded-l-lg transition-colors"
                           onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, s.id, 'resize-left', entry.id, timeToSlot(entry.scheduled_start!), timeToSlot(entry.scheduled_end!)) }} />
-                        <div className="flex-1 px-1.5 flex items-center gap-1 min-w-0 pointer-events-none">
-                          <span className="text-[11px] font-bold text-white truncate">{fmtTimeShort(entry.scheduled_start!)}–{fmtTimeShort(entry.scheduled_end!)}</span>
-                          {bar.width > 90 && <span className="text-[10px] text-white/80">{estimatedHours(entry).toFixed(1)}h</span>}
+
+                        <div className="flex-1 px-2 flex items-center gap-1.5 min-w-0 pointer-events-none">
+                          <span className="text-[11px] font-bold text-white truncate drop-shadow-sm">
+                            {fmtTimeShort(entry.scheduled_start!)}–{fmtTimeShort(entry.scheduled_end!)}
+                          </span>
+                          {bar.width > 90 && (
+                            <span className="text-[10px] text-white/80 font-medium">{estimatedHours(entry).toFixed(1)}h</span>
+                          )}
+                          {bar.width > 160 && entry.department !== s.primary_department && (
+                            <span className="text-[10px] text-white/60 capitalize">({entry.department})</span>
+                          )}
                         </div>
-                        <div className="absolute right-0 top-0 bottom-0 w-2 cursor-e-resize hover:bg-white/30 rounded-r-md"
+
+                        <div className="absolute right-0 top-0 bottom-0 w-2.5 cursor-e-resize hover:bg-white/30 rounded-r-lg transition-colors"
                           onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, s.id, 'resize-right', entry.id, timeToSlot(entry.scheduled_start!), timeToSlot(entry.scheduled_end!)) }} />
                       </div>
                     )
                   })}
-                  {showDrag && <div className="absolute top-1 bottom-1 rounded-md border-2 border-dashed pointer-events-none z-10" style={{ left: dragPreview.left, width: dragPreview.width, backgroundColor: `${dept.barBg}40`, borderColor: dept.barBg }} />}
-                  {off && <div className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400 italic">Off</div>}
-                  {staffEntries.length === 0 && !off && !showDrag && <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"><span className="text-[10px] text-gray-300">drag to add</span></div>}
+
+                  {/* Drag preview */}
+                  {showDrag && (
+                    <div className="absolute top-1.5 bottom-1.5 rounded-lg border-2 border-dashed pointer-events-none z-10"
+                      style={{ left: dragPreview.left, width: dragPreview.width, backgroundColor: `${dept.barBg}20`, borderColor: dept.barBg }}>
+                      <div className="flex items-center h-full px-2">
+                        <span className="text-[11px] font-bold" style={{ color: dept.barBg }}>
+                          {slotToLabel(Math.round(dragPreview.left / SLOT_WIDTH))} – {slotToLabel(Math.round((dragPreview.left + dragPreview.width) / SLOT_WIDTH))}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* States */}
+                  {off && <div className="absolute inset-0 flex items-center justify-center"><span className="text-[10px] text-gray-400 italic bg-gray-100 px-2 py-0.5 rounded">Rostered Off</span></div>}
+                  {staffEntries.length === 0 && !off && !showDrag && (
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      <span className="text-[10px] text-gray-300 bg-white/80 px-2 py-0.5 rounded">Click & drag to add shift</span>
+                    </div>
+                  )}
+                  {staffEntries.length === 1 && !off && !showDrag && (
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      <span className="text-[9px] text-gray-300 bg-white/80 px-1.5 py-0.5 rounded">+ split</span>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -382,63 +495,110 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
 
         {/* Week totals */}
         <div className="flex-shrink-0 bg-white border-l overflow-hidden" style={{ width: WEEK_COL_WIDTH }}>
-          <div className="h-8 border-b bg-gray-50 flex items-center justify-center"><span className="text-[10px] font-semibold text-gray-500">Week</span></div>
-          {staff.map(s => (
-            <div key={s.id} className="border-b flex flex-col items-center justify-center" style={{ height: ROW_HEIGHT }}>
-              <span className="text-xs font-bold">{staffWeekHours(s.id).toFixed(1)}h</span>
-              <span className="text-[10px] text-amber-600">${staffWeekCost(s).toFixed(0)}</span>
+          <div className="h-8 border-b bg-gray-50 flex items-center justify-center">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Week</span>
+          </div>
+          {staff.map((s, idx) => (
+            <div key={s.id} className={`border-b flex flex-col items-center justify-center ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
+              style={{ height: ROW_HEIGHT }}>
+              <span className="text-xs font-bold text-gray-900">{staffWeekHours(s.id).toFixed(1)}h</span>
+              <span className="text-[10px] text-amber-600 font-medium">${staffWeekCost(s).toFixed(0)}</span>
             </div>
           ))}
         </div>
       </div>
-      {/* Footer bar */}
-      <div className="flex items-center gap-4 px-2 py-1 bg-stone-50 border-t flex-shrink-0 text-[10px] text-gray-400">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-500" />Production</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-500" />Shop</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-green-500" />Delivery</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-500" />Admin</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-purple-500" />Management</span>
+
+      {/* ── Footer Legend ── */}
+      <div className="flex items-center px-3 py-1.5 bg-white border-t flex-shrink-0 shadow-[0_-1px_3px_rgba(0,0,0,0.05)]">
+        <div className="flex items-center gap-4">
+          {Object.entries(DEPT_COLOURS).map(([key, val]) => (
+            <span key={key} className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ backgroundColor: val.barBg }} />
+              <span className="text-[11px] text-gray-500 capitalize">{key}</span>
+            </span>
+          ))}
         </div>
-        <span className="ml-auto">Drag to create · Drag bar to move · Drag edges to resize · Double-click to edit</span>
+        <div className="flex-1" />
+        <div className="text-[10px] text-gray-400 hidden md:flex items-center gap-1">
+          💡 Drag to create · Grab bar to move · Drag edges to resize · Double-click to edit details
+        </div>
       </div>
-      {/* Edit Modal */}
+
+      {/* ── Edit Modal ── */}
       {editEntry && editForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setEditEntry(null)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
-            <div className="p-4 border-b flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setEditEntry(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b bg-gray-50 rounded-t-2xl flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-bold">{editEntry.entry ? 'Edit Shift' : 'Add Shift'}</h3>
-                <p className="text-sm text-gray-500">{staff.find(s => s.id === editEntry.staffId)?.name} · {new Date(editEntry.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
-                  {editEntry.entry && editEntry.entry.section > 1 && <span className="ml-1 text-amber-600">(Split #{editEntry.entry.section})</span>}
+                <h3 className="text-lg font-bold text-gray-900">{editEntry.entry ? 'Edit Shift' : 'Add Shift'}</h3>
+                <p className="text-sm text-gray-500">
+                  {staff.find(s => s.id === editEntry.staffId)?.name} · {new Date(editEntry.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  {editEntry.entry && editEntry.entry.section > 1 && <span className="ml-1 text-amber-600 font-medium">(Split #{editEntry.entry.section})</span>}
                 </p>
               </div>
-              <button onClick={() => setEditEntry(null)} className="p-1 hover:bg-gray-100 rounded-lg"><X className="h-5 w-5 text-gray-400" /></button>
+              <button onClick={() => setEditEntry(null)} className="p-2 hover:bg-gray-200 rounded-lg transition-colors">
+                <X className="h-5 w-5 text-gray-400" />
+              </button>
             </div>
-            <div className="p-4 space-y-3">
+
+            <div className="p-5 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Department</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">Department</label>
                 <select value={editForm.department} onChange={e => setEditForm((p: any) => ({ ...p, department: e.target.value }))} className={inp}>
-                  <option value="production">🍞 Production</option><option value="shop">🏪 Shop</option><option value="delivery">🚚 Delivery</option><option value="admin">📋 Admin</option><option value="management">👔 Management</option>
+                  <option value="production">🍞 Production</option>
+                  <option value="shop">🏪 Shop</option>
+                  <option value="delivery">🚚 Delivery</option>
+                  <option value="admin">📋 Admin</option>
+                  <option value="management">👔 Management</option>
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-xs font-medium text-gray-700 mb-1">Start</label><input type="time" value={editForm.scheduled_start} onChange={e => setEditForm((p: any) => ({ ...p, scheduled_start: e.target.value }))} className={inp} /></div>
-                <div><label className="block text-xs font-medium text-gray-700 mb-1">Finish</label><input type="time" value={editForm.scheduled_end} onChange={e => setEditForm((p: any) => ({ ...p, scheduled_end: e.target.value }))} className={inp} /></div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Start</label>
+                  <input type="time" value={editForm.scheduled_start} onChange={e => setEditForm((p: any) => ({ ...p, scheduled_start: e.target.value }))} className={inp} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Finish</label>
+                  <input type="time" value={editForm.scheduled_end} onChange={e => setEditForm((p: any) => ({ ...p, scheduled_end: e.target.value }))} className={inp} />
+                </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Day Type</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">Day Type</label>
                 <select value={editForm.day_type} onChange={e => setEditForm((p: any) => ({ ...p, day_type: e.target.value }))} className={inp}>
-                  <option value="normal">Normal</option><option value="saturday">Saturday</option><option value="sunday">Sunday</option><option value="public_holiday">Public Holiday</option><option value="leave">Leave</option>
+                  <option value="normal">Normal</option>
+                  <option value="saturday">Saturday</option>
+                  <option value="sunday">Sunday</option>
+                  <option value="public_holiday">Public Holiday</option>
+                  <option value="leave">Leave</option>
                 </select>
               </div>
-              {editForm.day_type === 'public_holiday' && <div><label className="block text-xs font-medium text-gray-700 mb-1">Holiday Name</label><input type="text" value={editForm.public_holiday_name} onChange={e => setEditForm((p: any) => ({ ...p, public_holiday_name: e.target.value }))} className={inp} placeholder="e.g. Easter Monday" /></div>}
-              <div><label className="block text-xs font-medium text-gray-700 mb-1">Note</label><input type="text" value={editForm.manager_note} onChange={e => setEditForm((p: any) => ({ ...p, manager_note: e.target.value }))} className={inp} placeholder="Optional..." /></div>
+              {editForm.day_type === 'public_holiday' && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Holiday Name</label>
+                  <input type="text" value={editForm.public_holiday_name} onChange={e => setEditForm((p: any) => ({ ...p, public_holiday_name: e.target.value }))} className={inp} placeholder="e.g. Easter Monday" />
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">Note</label>
+                <input type="text" value={editForm.manager_note} onChange={e => setEditForm((p: any) => ({ ...p, manager_note: e.target.value }))} className={inp} placeholder="Optional note…" />
+              </div>
             </div>
-            <div className="p-4 border-t flex gap-2">
-              <button onClick={handleSaveModal} disabled={saving} className="flex-1 py-2 bg-amber-700 text-white rounded-lg text-sm font-medium hover:bg-amber-800 disabled:opacity-50">{saving ? 'Saving...' : editEntry.entry ? 'Update' : 'Add Shift'}</button>
-              {editEntry.entry && <button onClick={() => handleDelete(editEntry.entry!.id)} disabled={saving} className="px-3 py-2 bg-red-50 text-red-700 rounded-lg text-sm hover:bg-red-100 flex items-center gap-1"><Trash2 className="h-3.5 w-3.5" />Del</button>}
-              <button onClick={() => setEditEntry(null)} disabled={saving} className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+
+            <div className="p-5 border-t bg-gray-50 rounded-b-2xl flex gap-2">
+              <button onClick={handleSaveModal} disabled={saving}
+                className="flex-1 py-2.5 bg-amber-700 text-white rounded-lg text-sm font-medium hover:bg-amber-800 disabled:opacity-50 transition-colors shadow-sm">
+                {saving ? 'Saving…' : editEntry.entry ? 'Update Shift' : 'Add Shift'}
+              </button>
+              {editEntry.entry && (
+                <button onClick={() => handleDelete(editEntry.entry!.id)} disabled={saving}
+                  className="px-4 py-2.5 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors flex items-center gap-1.5">
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </button>
+              )}
+              <button onClick={() => setEditEntry(null)} disabled={saving}
+                className="px-4 py-2.5 border rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -446,4 +606,3 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
     </div>
   )
 }
-
