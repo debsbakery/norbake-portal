@@ -491,9 +491,9 @@ export default function RosterGrid({
   const inp = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
 
   return (
-    <div className="container mx-auto px-2 py-2 max-w-full">
-         {/* ── Header ── */}
-      <div className="sticky top-0 z-30 bg-gray-50 -mx-4 px-4 py-2 flex items-center justify-between mb-2 flex-wrap gap-2 border-b">
+    <div className="px-2 py-1 max-w-full">
+    {/* ── Header ── */}
+      <div className="flex items-center justify-between mb-1 gap-2">
               <div className="flex items-center gap-3">
           <a href="/admin" className="p-2 border rounded-lg hover:bg-gray-50 transition-colors">
             <ChevronLeft className="h-5 w-5" />
@@ -529,6 +529,7 @@ export default function RosterGrid({
       </div>
 
       {/* Copy result */}
+          {/* Inline alerts */}
       {copyResult && (
         <div className={`mb-4 p-3 rounded-lg text-sm flex items-center justify-between ${
           copyResult.startsWith('✅') ? 'bg-green-50 border border-green-200 text-green-800'
@@ -540,7 +541,7 @@ export default function RosterGrid({
       )}
 
       {/* ── Day Tabs ── */}
-        <div className="flex gap-1 mb-2 overflow-x-auto pb-1">
+      <div className="flex gap-0.5 mb-1 overflow-x-auto">
           {weekDates.map((date, i) => {
           const isToday = date === todayStr
           const isActive = i === activeDay
@@ -548,7 +549,8 @@ export default function RosterGrid({
           const cost = dayTotalCost(date)
           return (
             <button key={date} onClick={() => setActiveDay(i)}
-              className={`flex-shrink-0 px-3 py-1 rounded-lg text-xs font-medium transition-all
+
+                          className={`flex-shrink-0 px-2 py-0.5 rounded text-xs font-medium transition-all
 
             ${isActive
                   ? 'bg-amber-700 text-white shadow-md'
@@ -560,11 +562,7 @@ export default function RosterGrid({
               <div className="text-xs opacity-80">
                 {new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
               </div>
-              {hrs > 0 && (
-                <div className={`text-xs mt-0.5 ${isActive ? 'opacity-80' : 'text-gray-400'}`}>
-                  {hrs.toFixed(1)}h · ${cost.toFixed(0)}
-                </div>
-              )}
+            
             </button>
           )
         })}
@@ -579,7 +577,7 @@ export default function RosterGrid({
       )}
 
       {/* ── Timeline Grid ── */}
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      <div className="bg-white rounded shadow overflow-hidden">
         <div className="flex">
 
           {/* Staff column (sticky left) */}
