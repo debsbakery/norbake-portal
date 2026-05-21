@@ -391,7 +391,17 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
           ))}
         </div>
       </div>
-
+      {/* Footer bar */}
+      <div className="flex items-center gap-4 px-2 py-1 bg-stone-50 border-t flex-shrink-0 text-[10px] text-gray-400">
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-500" />Production</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-500" />Shop</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-green-500" />Delivery</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-500" />Admin</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-purple-500" />Management</span>
+        </div>
+        <span className="ml-auto">Drag to create · Drag bar to move · Drag edges to resize · Double-click to edit</span>
+      </div>
       {/* Edit Modal */}
       {editEntry && editForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setEditEntry(null)}>
