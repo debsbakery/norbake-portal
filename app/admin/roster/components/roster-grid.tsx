@@ -285,7 +285,7 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
           <ChevronLeft className="h-4 w-4 text-gray-600" />
         </a>
         <div className="flex items-center gap-2">
-          <span className="text-base font-bold text-gray-900">📅 Roster</span>
+          <span className="text-lg font-bold text-gray-900">📅 Roster</span>
           <span className="text-xs text-gray-400 hidden sm:inline">
             {weekLabel}
           </span>
@@ -332,8 +332,9 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
                     ? 'bg-amber-50 text-amber-800 ring-2 ring-amber-300'
                     : 'text-gray-500 hover:bg-gray-50'
               }`}>
-              <div className="text-[11px] font-bold">{DAY_LABELS[i]}</div>
-              <div className={`text-[10px] ${isActive ? 'text-amber-200' : 'text-gray-400'}`}>
+
+              <div className="text-sm font-bold">{DAY_LABELS[i]}</div>
+              <div className={`text-xs ${isActive ? 'text-amber-200' : 'text-gray-400'}`}>
                 {dayDate.getDate()}
               </div>
             </button>
@@ -341,9 +342,10 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
         })}
         <div className="w-px h-6 bg-gray-200 mx-1" />
         <div className="text-center px-2">
-          <div className="text-[10px] text-gray-400">Week</div>
-          <div className="text-xs font-bold text-gray-900">{totalWeeklyHours.toFixed(1)}h</div>
-          <div className="text-[10px] text-amber-600 font-medium">${totalWeeklyCost.toFixed(0)}</div>
+      
+                <div className="text-xs text-gray-400">Week</div>
+          <div className="text-sm font-bold text-gray-900">{totalWeeklyHours.toFixed(1)}h</div>
+          <div className="text-xs text-amber-600 font-medium">${totalWeeklyCost.toFixed(0)}</div>
         </div>
       </div>
 
@@ -501,7 +503,7 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
           {staff.map((s, idx) => (
             <div key={s.id} className={`border-b flex flex-col items-center justify-center ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
               style={{ height: ROW_HEIGHT }}>
-              <span className="text-xs font-bold text-gray-900">{staffWeekHours(s.id).toFixed(1)}h</span>
+          <span className="text-sm text-gray-400 hidden sm:inline"></span>
               <span className="text-[10px] text-amber-600 font-medium">${staffWeekCost(s).toFixed(0)}</span>
             </div>
           ))}
@@ -514,12 +516,12 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
           {Object.entries(DEPT_COLOURS).map(([key, val]) => (
             <span key={key} className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ backgroundColor: val.barBg }} />
-              <span className="text-[11px] text-gray-500 capitalize">{key}</span>
+              <span className="text-sm text-gray-500 capitalize">{key}</span>
             </span>
           ))}
         </div>
         <div className="flex-1" />
-        <div className="text-[10px] text-gray-400 hidden md:flex items-center gap-1">
+        <div className="text-xs text-gray-400 hidden md:flex items-center gap-1">
           💡 Drag to create · Grab bar to move · Drag edges to resize · Double-click to edit details
         </div>
       </div>
