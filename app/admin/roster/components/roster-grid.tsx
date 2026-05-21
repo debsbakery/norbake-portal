@@ -95,7 +95,9 @@ function estimatedHours(entry: RosterEntry): number {
   const [sh, sm] = entry.scheduled_start.split(':').map(Number)
   const [eh, em] = entry.scheduled_end.split(':').map(Number)
   const grossMins = (eh * 60 + em) - (sh * 60 + sm)
-  const paidMins = Math.max(0, grossMins - (entry.break_minutes ?? 0))
+  // Only deduct break if shift is 4.5 hours (270 mins) or longer
+  const breakMins = grossMins >= 270 ? (entry.break_minutes ?? 0) : 0
+  const paidMins = Math.max(0, grossMins - breakMins)
   return Math.round((paidMins / 60) * 100) / 100
 }
 

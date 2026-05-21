@@ -55,7 +55,13 @@ export async function POST(request: NextRequest) {
       salary_hours_per_week:       staff.salary_hours_per_week,
       super_rate_percent:          staff.super_rate_percent,
       true_hourly_cost:            staff.true_hourly_cost,
-      break_minutes:               staff.break_minutes,
+      break_minutes:               (() => {
+        if (!body.scheduled_start || !body.scheduled_end) return staff.break_minutes
+        const [sh, sm] = body.scheduled_start.split(':').map(Number)
+        const [eh, em] = body.scheduled_end.split(':').map(Number)
+        const grossMins = (eh * 60 + em) - (sh * 60 + sm)
+        return grossMins >= 270 ? staff.break_minutes : 0
+      })(),
       day_type:                    body.day_type ?? dayType,
       status:                      'scheduled',
     }, { onConflict: 'staff_id,work_date,section' })
