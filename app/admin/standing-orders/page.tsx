@@ -57,11 +57,16 @@ const supabase = createAdminClient()
     `)
     .order('delivery_days', { ascending: true })
 
+   console.log('[STANDING ORDERS] query result:', { 
+    count: standingOrders?.length ?? 0, 
+    error: error?.message ?? null,
+    firstOrder: standingOrders?.[0] ? { id: standingOrders[0].id, days: standingOrders[0].delivery_days } : null
+  })
+
   if (error) {
     console.error('Error fetching standing orders:', error)
     return { standingOrders: [] }
   }
-
   return { standingOrders: (standingOrders || []) as StandingOrder[] }
 }
 
