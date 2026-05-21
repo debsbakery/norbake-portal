@@ -1,7 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { redirect } from "next/navigation"
-import { createServiceClient } from "@/lib/supabase/server"
-import { checkAdmin } from "@/lib/auth"
+import { createAdminClient } from "@/lib/supabase/admin"import { checkAdmin } from "@/lib/auth"
 import { ArrowLeft, Calendar, Plus, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import {
@@ -40,8 +39,7 @@ interface StandingOrder {
 }
 
 async function getStandingOrdersData() {
-  const supabase = await createServiceClient()
-
+const supabase = createAdminClient()
   const { data: standingOrders, error } = await supabase
     .from('standing_orders')
     .select(`
