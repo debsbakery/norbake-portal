@@ -493,8 +493,8 @@ export default function RosterGrid({
   return (
     <div className="container mx-auto px-4 py-6 max-w-full">
 
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+         {/* ── Header ── */}
+      <div className="sticky top-0 z-30 bg-gray-50 -mx-4 px-4 py-3 flex items-center justify-between mb-4 flex-wrap gap-3 border-b">
               <div className="flex items-center gap-3">
           <a href="/admin" className="p-2 border rounded-lg hover:bg-gray-50 transition-colors">
             <ChevronLeft className="h-5 w-5" />
