@@ -491,7 +491,7 @@ export default function RosterGrid({
   const inp = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
 
   return (
-    <div className="px-2 py-1 max-w-full">
+    <div className="px-2 py-1 max-w-full h-[calc(100vh-64px)] overflow-y-auto">
     {/* ── Header ── */}
       <div className="flex items-center justify-between mb-1 gap-2">
               <div className="flex items-center gap-3">
