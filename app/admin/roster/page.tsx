@@ -46,7 +46,11 @@ export default async function RosterPage({
     .from('roster_entries')
     .select('*')
     .in('work_date', weekDates)
-
+  // Fetch actual clock data for this week
+  const { data: shifts } = await supabase
+    .from('shifts')
+    .select('id, staff_id, work_date, section, effective_start, effective_end, arrived_late_min, left_early_min, status, paid_hours, gross_pay')
+    .in('work_date', weekDates)
   // Prev/next week
   const prevSunday = (() => {
     const d = new Date(weekStart + 'T00:00:00')
@@ -59,10 +63,11 @@ export default async function RosterPage({
     return d.toISOString().split('T')[0]
   })()
 
-  return (
+    return (
     <RosterGrid
       staff={staff ?? []}
       entries={entries ?? []}
+      shifts={shifts ?? []}
       weekStart={weekStart}
       weekDates={weekDates}
       prevWeek={prevSunday}

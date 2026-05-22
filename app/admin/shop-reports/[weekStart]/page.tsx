@@ -190,8 +190,7 @@ export default function WeeklyShopReport() {
     setIsDirty(true)
     triggerAutoSave()
   }
-
-  const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
+  const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
   type PurchaseDay = typeof DAYS[number]
 
   function updatePurchase(supplier: string, day: PurchaseDay, val: string) {
@@ -541,9 +540,9 @@ export default function WeeklyShopReport() {
                   <thead>
                     <tr className="bg-gray-50 border-b text-gray-600 text-xs">
                       <th className="text-left px-3 py-2 whitespace-nowrap">Supplier</th>
-                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
-                        <th key={d} className="text-center px-1 py-2 w-20">{d}</th>
-                      ))}
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+                        <th key={d} className="text-center px-2 py-2 w-24">{d}</th>
+))}
                       <th className="text-right px-3 py-2 w-24">Total</th>
                       <th className="text-right px-3 py-2 w-16 no-print">%</th>
                     </tr>
@@ -557,12 +556,12 @@ export default function WeeklyShopReport() {
                           <td className="px-3 py-1.5 font-medium text-gray-700 whitespace-nowrap">{supplier}</td>
                           {DAYS.map(day => (
                             <td key={day} className="px-1 py-1">
-                              <input
+                                                        <input
                                 type="number" min="0" step="0.01"
                                 value={p[day] === 0 ? '' : p[day]}
                                 onChange={e => updatePurchase(supplier, day, e.target.value)}
-                                placeholder="0"
-                                className="no-print w-full border rounded px-1.5 py-1 text-right text-xs
+                                placeholder="0.00"
+                                className="no-print w-full border rounded px-2 py-1.5 text-right text-sm
                                   focus:outline-none focus:ring-1 focus:ring-teal-400"
                               />
                               <span className="hidden print:block text-right text-xs">

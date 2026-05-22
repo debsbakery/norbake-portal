@@ -34,15 +34,29 @@ interface RosterEntry {
   public_holiday_name: string | null
 }
 
+interface ActualShift {
+  id: string
+  staff_id: string
+  work_date: string
+  section: number
+  effective_start: string | null
+  effective_end: string | null
+  arrived_late_min: number | null
+  left_early_min: number | null
+  status: string
+  paid_hours: number | null
+  gross_pay: number | null
+}
+
 interface Props {
   staff: StaffMember[]
   entries: RosterEntry[]
+  shifts: ActualShift[]
   weekStart: string
   weekDates: string[]
   prevWeek: string
   nextWeek: string
 }
-
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const HOUR_START = 4
 const HOUR_END = 22
@@ -100,8 +114,8 @@ function fmtTimeShort(t: string): string {
   return m === 0 ? `${h12}${ampm}` : `${h12}:${m.toString().padStart(2, '0')}${ampm}`
 }
 
-export default function RosterGrid({ staff, entries, weekStart, weekDates, prevWeek, nextWeek }: Props) {
-  const router = useRouter()
+export default function RosterGrid({ staff, entries, shifts, weekStart, weekDates, prevWeek, nextWeek }: Props) {
+const router = useRouter()
   const [localEntries, setLocalEntries] = useState<RosterEntry[]>(entries)
   const [activeDay, setActiveDay] = useState<number>(() => {
     const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' })).toISOString().split('T')[0]
@@ -111,6 +125,7 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
   const [copying, setCopying] = useState(false)
   const [copyResult, setCopyResult] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [showActuals, setShowActuals] = useState(false)
   const [dragState, setDragState] = useState<{
     type: 'create' | 'move' | 'resize-left' | 'resize-right'
     staffId: string; startSlot: number; currentSlot: number
@@ -130,6 +145,19 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
 
   function getEntries(staffId: string, date: string): RosterEntry[] {
     return localEntries.filter(e => e.staff_id === staffId && e.work_date === date && e.status !== 'rostered_off').sort((a, b) => (a.section ?? 1) - (b.section ?? 1))
+  }
+   function getActualShifts(staffId: string, date: string): ActualShift[] {
+    return shifts.filter(s => s.staff_id === staffId && s.work_date === date && s.effective_start)
+      .sort((a, b) => (a.section ?? 1) - (b.section ?? 1))
+  }
+
+  function actualTimeToSlot(timestamp: string): number {
+    const d = new Date(timestamp)
+    // Convert to Perth time
+    const perth = new Date(d.toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
+    const h = perth.getHours()
+    const m = perth.getMinutes()
+    return Math.max(0, Math.min(TOTAL_SLOTS, ((h * 60 + m) - HOUR_START * 60) / 30))
   }
   function isRosteredOff(staffId: string, date: string): boolean {
     return localEntries.some(e => e.staff_id === staffId && e.work_date === date && e.status === 'rostered_off')
@@ -313,7 +341,12 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
         <a href="/admin/staff" className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
           <Users className="h-3 w-3" />Staff
         </a>
-
+        <button onClick={() => setShowActuals(prev => !prev)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            showActuals ? 'bg-green-600 text-white' : 'border text-gray-600 hover:bg-gray-50'
+          }`}>
+          {showActuals ? '🟢 Actuals ON' : '⚪ Actuals'}
+        </button>
         {saving && <div className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />}
       </div>
 
@@ -466,6 +499,29 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
                   })}
 
                   {/* Drag preview */}
+                                    {/* Actual clock bars */}
+                  {showActuals && !off && getActualShifts(s.id, currentDate).map(shift => {
+                    if (!shift.effective_start) return null
+                    const startSlot = actualTimeToSlot(shift.effective_start)
+                    const endSlot = shift.effective_end ? actualTimeToSlot(shift.effective_end) : startSlot + 2
+                    const left = startSlot * SLOT_WIDTH
+                    const width = Math.max((endSlot - startSlot) * SLOT_WIDTH, SLOT_WIDTH / 2)
+                    const isLate = (shift.arrived_late_min ?? 0) > 5
+                    const isOpen = !shift.effective_end
+                    const barColor = isOpen ? '#ef4444' : isLate ? '#f97316' : '#22c55e'
+                    return (
+                      <div key={`actual-${shift.id}`}
+                        className="absolute rounded-sm pointer-events-none"
+                        style={{
+                          left, width, height: 6,
+                          bottom: 2,
+                          backgroundColor: barColor,
+                          opacity: 0.9,
+                        }}
+                        title={`Actual: ${shift.effective_start ? new Date(shift.effective_start).toLocaleTimeString('en-AU', { timeZone: 'Australia/Perth', hour: '2-digit', minute: '2-digit' }) : '?'} – ${shift.effective_end ? new Date(shift.effective_end).toLocaleTimeString('en-AU', { timeZone: 'Australia/Perth', hour: '2-digit', minute: '2-digit' }) : 'still in'}${isLate ? ` (${shift.arrived_late_min}min late)` : ''}`}
+                      />
+                    )
+                  })}
                   {showDrag && (
                     <div className="absolute top-1.5 bottom-1.5 rounded-lg border-2 border-dashed pointer-events-none z-10"
                       style={{ left: dragPreview.left, width: dragPreview.width, backgroundColor: `${dept.barBg}20`, borderColor: dept.barBg }}>
@@ -520,6 +576,14 @@ export default function RosterGrid({ staff, entries, weekStart, weekDates, prevW
             </span>
           ))}
         </div>
+               {showActuals && (
+          <div className="flex items-center gap-3 mx-4">
+            <span className="text-[10px] text-gray-400">|</span>
+            <span className="flex items-center gap-1"><span className="w-4 h-1.5 rounded-sm bg-green-500" />On time</span>
+            <span className="flex items-center gap-1"><span className="w-4 h-1.5 rounded-sm bg-orange-500" />Late</span>
+            <span className="flex items-center gap-1"><span className="w-4 h-1.5 rounded-sm bg-red-500" />Still in</span>
+          </div>
+        )}
         <div className="flex-1" />
         <div className="text-xs text-gray-400 hidden md:flex items-center gap-1">
           💡 Drag to create · Grab bar to move · Drag edges to resize · Double-click to edit details
