@@ -67,7 +67,7 @@ const SLOT_WIDTH = 28
 const TIMELINE_WIDTH = TOTAL_SLOTS * SLOT_WIDTH
 const STAFF_COL_WIDTH = 140
 const WEEK_COL_WIDTH = 80
-const ROW_HEIGHT = 48
+const ROW_HEIGHT = 52
 const MAX_SECTIONS = 2
 
 const DEPT_COLOURS: Record<string, { bg: string; barBg: string }> = {
@@ -150,13 +150,18 @@ const router = useRouter()
     return shifts.filter(s => s.staff_id === staffId && s.work_date === date && s.effective_start)
       .sort((a, b) => (a.section ?? 1) - (b.section ?? 1))
   }
-
   function actualTimeToSlot(timestamp: string): number {
     const d = new Date(timestamp)
-    // Convert to Perth time
-    const perth = new Date(d.toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
-    const h = perth.getHours()
-    const m = perth.getMinutes()
+    // Get Perth time using Intl formatter — reliable across all environments
+    const formatter = new Intl.DateTimeFormat('en-AU', {
+      timeZone: 'Australia/Perth',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+    })
+    const parts = formatter.formatToParts(d)
+    const h = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10)
+    const m = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10)
     return Math.max(0, Math.min(TOTAL_SLOTS, ((h * 60 + m) - HOUR_START * 60) / 30))
   }
   function isRosteredOff(staffId: string, date: string): boolean {
