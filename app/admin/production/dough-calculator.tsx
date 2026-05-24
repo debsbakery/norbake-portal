@@ -694,7 +694,7 @@ export default function DoughCalculator() {
                           <div className="text-xs text-gray-500">{flour1Label}</div>
                           {dt === 'white' && flour1Kg > 0 && (
                             <div className="text-xs font-bold text-blue-600 mt-0.5">
-                              {Math.ceil(flour1Kg / 25)} × 25kg bags
+                              {(flour1Kg / 25).toFixed(1)} bags (25kg)
                             </div>
                           )}
                         </td>
@@ -738,7 +738,7 @@ export default function DoughCalculator() {
                         }, 0)
                                         )} kg
                       <div className="text-sm font-bold text-blue-600 mt-0.5">
-                        {Math.ceil(
+                                               {(
                           summaries.reduce((sum, s) => {
                             const totalDough = s.rollWithSafety + s.breadWithSafety
                             const dt2 = s.doughType.toLowerCase()
@@ -749,7 +749,7 @@ export default function DoughCalculator() {
                             else return sum
                             return sum + (totalDough * fr * wp)
                           }, 0) / 25
-                        )} × 25kg bags
+                        ).toFixed(1)} bags (25kg)
                       </div>
                     </td>
                   </tr>
