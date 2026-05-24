@@ -59,7 +59,7 @@ export default function PackingGridPage() {
         : order.customer?.business_name ?? 'Unknown'
 
       if (!custMap.has(custId)) {
-        const short = custName.length > 20 ? custName.slice(0, 18) + '…' : custName
+        const short = custName
         custMap.set(custId, { id: custId, name: custName, shortName: short })
       }
 
@@ -162,7 +162,8 @@ export default function PackingGridPage() {
 
                     <th className="border border-gray-400 bg-gray-100 px-1 py-1 text-left sticky left-[40px] z-10" style={{ maxWidth: '120px' }}>Product</th>                    {customers.map(c => (
                       <th key={c.id} className="border border-gray-400 bg-gray-100 px-1 py-1 text-center min-w-[28px] max-w-[28px]"
-                        style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', height: '140px', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap' }}>                        {c.shortName}
+                        style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', height: '160px', fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        {c.name}
                       </th>
                     ))}
                     {[1, 2, 3].map(n => (
@@ -180,8 +181,8 @@ export default function PackingGridPage() {
                     return (
                       <tr key={p.id} className={idx % 2 === 0 ? '' : 'bg-gray-50'}>
                                               <td className="border border-gray-300 px-2 py-1 font-mono text-sm sticky left-0 bg-inherit z-10">{p.code}</td>
-                        <td className="border border-gray-300 px-1 py-1 font-semibold sticky left-[40px] bg-inherit z-10 text-xs whitespace-nowrap overflow-hidden text-ellipsis" style={{ maxWidth: '120px' }}>
-                          {p.name.length > 18 ? p.name.slice(0, 16) + '…' : p.name}
+                                             <td className="border border-gray-300 px-1 py-1 font-semibold sticky left-[40px] bg-inherit z-10 text-xs" style={{ maxWidth: '180px' }}>
+                          {p.name}
                         </td>
                         {customers.map(c => {
                           const qty = grid[p.id]?.[c.id] ?? 0
@@ -190,8 +191,10 @@ export default function PackingGridPage() {
                             </td>
                           )
                         })}
-                        <td className="border border-gray-400 px-2 py-0.5 text-center font-bold bg-gray-100">{rowTotal}</td>
-                      </tr>
+                        {[1, 2, 3].map(n => (
+                          <td key={`blank-${n}`} className="border border-gray-300 bg-yellow-50 px-1 py-1"></td>
+                        ))}
+                        <td className="border border-gray-400 px-2 py-1 text-center font-bold bg-gray-100">{rowTotal}</td>                      </tr>
                     )
                   })}
                 </tbody>
