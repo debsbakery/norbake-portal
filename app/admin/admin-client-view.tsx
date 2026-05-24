@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react'
 import {
   Clock, Users, BarChart3, Package, RefreshCw, Truck,
-  DollarSign, FileText,Thermometer, ShoppingCart, ChefHat, Receipt,
+  DollarSign, FileText, Thermometer, ShoppingCart, ChefHat, Receipt,
   Copy, Play, ClipboardList, Printer, QrCode, Store, X, CalendarDays, Search, Lock,
+  CheckCircle,
 } from 'lucide-react'
 
 import OrdersView from './orders-view'
@@ -195,7 +196,6 @@ export default function AdminClientView({
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-start py-4 gap-4">
             <div className="shrink-0">
-              {/* ✅ Norbake branding unchanged */}
               <h1 className="text-2xl font-bold" style={{ color: '#3E1F00' }}>
                 Admin Dashboard
               </h1>
@@ -272,6 +272,12 @@ export default function AdminClientView({
                 style={{ backgroundColor: '#1f2937' }}>
                 <DollarSign className="h-4 w-4" />AR Dashboard
               </a>
+              {/* ✅ Invoice Status — added for Norbake */}
+              <a href="/admin/invoice-status"
+                className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+                style={{ backgroundColor: '#0d9488' }}>
+                <CheckCircle className="h-4 w-4" />Invoice Status
+              </a>
               <a href="/admin/reports/weekly"
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
                 style={{ backgroundColor: '#7c3aed' }}>
@@ -328,15 +334,15 @@ export default function AdminClientView({
                 <DollarSign className="h-4 w-4" />Cost Settings
               </a>
               <a href="/admin/staff"
-  className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
-  style={{ backgroundColor: '#3E1F00' }}>
-  <Users className="h-4 w-4" />Staff
-</a>
-<a href="/admin/roster"
-  className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
-  style={{ backgroundColor: '#3E1F00' }}>
-  <CalendarDays className="h-4 w-4" />Roster
-</a>
+                className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+                style={{ backgroundColor: '#3E1F00' }}>
+                <Users className="h-4 w-4" />Staff
+              </a>
+              <a href="/admin/roster"
+                className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+                style={{ backgroundColor: '#3E1F00' }}>
+                <CalendarDays className="h-4 w-4" />Roster
+              </a>
               {can('manager') && (
                 <a href="/admin/hours"
                   className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
@@ -358,11 +364,11 @@ export default function AdminClientView({
                   <Lock className="h-4 w-4" />Access Roles
                 </a>
               )}
-<a href="/admin/staff/clock-qr"
-  className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
-  style={{ backgroundColor: '#3E1F00' }}>
-  <QrCode className="h-4 w-4" />Clock QR
-</a>
+              <a href="/admin/staff/clock-qr"
+                className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+                style={{ backgroundColor: '#3E1F00' }}>
+                <QrCode className="h-4 w-4" />Clock QR
+              </a>
               <a href="/admin/products/bulk-codes"
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
                 style={{ backgroundColor: '#4f46e5' }}>
@@ -378,12 +384,12 @@ export default function AdminClientView({
                 style={{ backgroundColor: '#0f766e' }}>
                 <Store className="h-4 w-4" />Shop Reports
               </a>
-                            <a href="/admin/temperature"
+              <a href="/admin/temperature"
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
                 style={{ backgroundColor: '#0891b2' }}>
                 <Thermometer className="h-4 w-4" />Temp & Cash
               </a>
-                            <a href="/admin/reports/summary"
+              <a href="/admin/reports/summary"
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
                 style={{ backgroundColor: '#7c3aed' }}>
                 <BarChart3 className="h-4 w-4" />Business Summary
@@ -399,7 +405,6 @@ export default function AdminClientView({
                 <FileText className="h-4 w-4" />Portal QR
               </a>
 
-              {/* ✅ Generate S/O — now opens modal with skip days */}
               <button
                 onClick={openModal}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 shadow-md text-sm font-medium">
