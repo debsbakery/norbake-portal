@@ -102,17 +102,12 @@ export default function PackingGridPage() {
 
   return (
     <>
-      ```<user-input jsx global>{`
+           <style>{`
         @media print {
-          body * { visibility: hidden; }
-          #packing-print, #packing-print * { visibility: visible; }
-          #packing-print { position: absolute; left: 0; top: 0; width: 100%; }
           .no-print { display: none !important; }
           @page { size: landscape; margin: 8mm; }
-          table { font-size: 7pt; }
-          th, td { padding: 2px 3px !important; }
         }
-      `}</user-input>
+      `}</style>
 
       <div className="max-w-[98vw] mx-auto p-4 space-y-4">
         {/* Controls */}
@@ -161,15 +156,13 @@ export default function PackingGridPage() {
 
             {/* Grid */}
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-xs">
-                <thead>
+              <table className="w-full border-collapse text-sm">                <thead>
                   <tr>
                     <th className="border border-gray-400 bg-gray-100 px-2 py-1 text-left sticky left-0 z-10 min-w-[40px]">Code</th>
                     <th className="border border-gray-400 bg-gray-100 px-2 py-1 text-left sticky left-[40px] z-10 min-w-[140px]">Product</th>
                     {customers.map(c => (
                       <th key={c.id} className="border border-gray-400 bg-gray-100 px-1 py-1 text-center min-w-[28px] max-w-[28px]"
-                        style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', height: '120px', fontSize: '7px', whiteSpace: 'nowrap' }}>
-                        {c.shortName}
+                        style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', height: '140px', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap' }}>                        {c.shortName}
                       </th>
                     ))}
                     <th className="border border-gray-400 bg-gray-800 text-white px-2 py-1 text-center font-bold min-w-[40px]">Total</th>
@@ -181,13 +174,12 @@ export default function PackingGridPage() {
                     if (rowTotal === 0) return null
                     return (
                       <tr key={p.id} className={idx % 2 === 0 ? '' : 'bg-gray-50'}>
-                        <td className="border border-gray-300 px-2 py-0.5 font-mono text-[7px] sticky left-0 bg-inherit z-10">{p.code}</td>
-                        <td className="border border-gray-300 px-2 py-0.5 font-medium sticky left-[40px] bg-inherit z-10 text-[8px]">{p.name}</td>
+                                              <td className="border border-gray-300 px-2 py-1 font-mono text-sm sticky left-0 bg-inherit z-10">{p.code}</td>
+                        <td className="border border-gray-300 px-2 py-1 font-semibold sticky left-[50px] bg-inherit z-10 text-sm">{p.name}</td>
                         {customers.map(c => {
                           const qty = grid[p.id]?.[c.id] ?? 0
                           return (
-                            <td key={c.id} className={`border border-gray-300 px-1 py-0.5 text-center ${qty > 0 ? 'font-bold' : 'text-gray-200'}`}>
-                              {qty > 0 ? qty : ''}
+                            <td key={c.id} className={`border border-gray-300 px-1 py-1 text-center text-sm ${qty > 0 ? 'font-bold' : 'text-gray-200'}`}>                              {qty > 0 ? qty : ''}
                             </td>
                           )
                         })}
@@ -202,8 +194,7 @@ export default function PackingGridPage() {
                     {customers.map(c => {
                       const custTotal = products.reduce((sum, p) => sum + (grid[p.id]?.[c.id] ?? 0), 0)
                       return (
-                        <td key={c.id} className="border border-gray-600 px-1 py-1 text-center text-[8px]">
-                          {custTotal > 0 ? custTotal : ''}
+                        <td key={c.id} className="border border-gray-600 px-1 py-1 text-center text-sm">                          {custTotal > 0 ? custTotal : ''}
                         </td>
                       )
                     })}
