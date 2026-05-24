@@ -131,8 +131,7 @@ export async function generateWeeklyInvoice(
     if (o.status === 'invoiced' && !o.weekly_invoice_id) return false
     // Pending/confirmed — include
     return true
-  })
-  if (oErr) throw new Error(oErr.message)
+   })
 
   if (!orders || orders.length === 0) {
     return {
@@ -171,14 +170,7 @@ export async function generateWeeklyInvoice(
   dueDate.setDate(dueDate.getDate() + (customer.payment_terms ?? 14))
   const dueDateStr = dueDate.toISOString().split('T')[0]
 
-  // ── 6. Check if a weekly invoice already exists for this customer+week ─
-  const { data: existing } = await supabase
-    .from('weekly_invoices')
-    .select('id, invoice_number, status')
-    .eq('customer_id', customerId)
-    .eq('week_start',  weekStart)
-    .maybeSingle()
-
+ 
   let weeklyId: string
   let invoiceNumber: number
   let wasRevised = false
