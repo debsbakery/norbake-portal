@@ -689,9 +689,14 @@ export default function DoughCalculator() {
                         <td className="border px-4 py-2.5 font-bold uppercase">{s.doughType}</td>
                         <td className="border px-4 py-2.5 text-right font-semibold">{fmt(totalDough)} kg</td>
                         <td className="border px-4 py-2.5 text-right font-bold" style={{ color: '#006A4E' }}>{fmt(totalFlour)} kg</td>
-                        <td className="border px-4 py-2.5 text-right">
+                                              <td className="border px-4 py-2.5 text-right">
                           <div className="font-semibold">{fmt(flour1Kg)} kg</div>
                           <div className="text-xs text-gray-500">{flour1Label}</div>
+                          {dt === 'white' && flour1Kg > 0 && (
+                            <div className="text-xs font-bold text-blue-600 mt-0.5">
+                              {Math.ceil(flour1Kg / 25)} × 25kg bags
+                            </div>
+                          )}
                         </td>
                         <td className="border px-4 py-2.5 text-right">
                           {flour2Pct > 0 ? (
@@ -731,10 +736,25 @@ export default function DoughCalculator() {
                           }
                           return sum + (totalDough * flourRatio * whitePct)
                         }, 0)
-                      )} kg
+                                        )} kg
+                      <div className="text-sm font-bold text-blue-600 mt-0.5">
+                        {Math.ceil(
+                          summaries.reduce((sum, s) => {
+                            const totalDough = s.rollWithSafety + s.breadWithSafety
+                            const dt2 = s.doughType.toLowerCase()
+                            let fr = 0.64, wp = 1.0
+                            if (dt2 === 'grain' || dt2 === 'multigrain') { fr = 0.62; wp = 0.40 }
+                            else if (dt2 === 'wholemeal') { fr = 0.62; wp = 0.50 }
+                            else if (dt2 === 'white') { fr = 0.64; wp = 1.0 }
+                            else return sum
+                            return sum + (totalDough * fr * wp)
+                          }, 0) / 25
+                        )} × 25kg bags
+                      </div>
                     </td>
                   </tr>
                   <tr className="bg-amber-50 font-bold">
+
                     <td className="border px-4 py-2.5">TOTAL GRAIN FLOUR</td>
                     <td className="border px-4 py-2.5" />
                     <td className="border px-4 py-2.5" />
