@@ -633,7 +633,141 @@ export default function DoughCalculator() {
               </div>
             </div>
           )}
+          {/* ── Flour Totals Summary ── */}
+          <div className="mt-8 mb-4">
+            <h2 className="text-lg font-bold mb-4 flex items-center gap-2" style={{ color: '#006A4E' }}>
+              🌾 Flour Requirements
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-gray-800 text-white">
+                    <th className="border border-gray-600 px-4 py-2.5 text-left">Dough Type</th>
+                    <th className="border border-gray-600 px-4 py-2.5 text-right">Total Dough (kg)</th>
+                    <th className="border border-gray-600 px-4 py-2.5 text-right">Total Flour (kg)</th>
+                    <th className="border border-gray-600 px-4 py-2.5 text-right">Flour 1</th>
+                    <th className="border border-gray-600 px-4 py-2.5 text-right">Flour 2</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summaries.map(s => {
+                    const totalDough = s.rollWithSafety + s.breadWithSafety
+                    const dt = s.doughType.toLowerCase()
 
+                    let flourRatio = 0.64
+                    let flour1Label = 'White Flour'
+                    let flour1Pct = 1.0
+                    let flour2Label = ''
+                    let flour2Pct = 0
+
+                    if (dt === 'grain' || dt === 'multigrain') {
+                      flourRatio = 0.62
+                      flour1Label = 'Grain Flour (60%)'
+                      flour1Pct = 0.60
+                      flour2Label = 'White Flour (40%)'
+                      flour2Pct = 0.40
+                    } else if (dt === 'wholemeal') {
+                      flourRatio = 0.62
+                      flour1Label = 'Wholemeal Flour (50%)'
+                      flour1Pct = 0.50
+                      flour2Label = 'White Flour (50%)'
+                      flour2Pct = 0.50
+                    } else if (dt === 'white') {
+                      flourRatio = 0.64
+                      flour1Label = 'White Flour'
+                      flour1Pct = 1.0
+                      flour2Label = ''
+                      flour2Pct = 0
+                    }
+
+                    const totalFlour = totalDough * flourRatio
+                    const flour1Kg = totalFlour * flour1Pct
+                    const flour2Kg = totalFlour * flour2Pct
+
+                    return (
+                      <tr key={s.doughType} className="hover:bg-gray-50 border-b">
+                        <td className="border px-4 py-2.5 font-bold uppercase">{s.doughType}</td>
+                        <td className="border px-4 py-2.5 text-right font-semibold">{fmt(totalDough)} kg</td>
+                        <td className="border px-4 py-2.5 text-right font-bold" style={{ color: '#006A4E' }}>{fmt(totalFlour)} kg</td>
+                        <td className="border px-4 py-2.5 text-right">
+                          <div className="font-semibold">{fmt(flour1Kg)} kg</div>
+                          <div className="text-xs text-gray-500">{flour1Label}</div>
+                        </td>
+                        <td className="border px-4 py-2.5 text-right">
+                          {flour2Pct > 0 ? (
+                            <>
+                              <div className="font-semibold">{fmt(flour2Kg)} kg</div>
+                              <div className="text-xs text-gray-500">{flour2Label}</div>
+                            </>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-gray-100 font-bold border-t-2 border-gray-800">
+                    <td className="border px-4 py-2.5">TOTAL WHITE FLOUR</td>
+                    <td className="border px-4 py-2.5" />
+                    <td className="border px-4 py-2.5" />
+                    <td colSpan={2} className="border px-4 py-2.5 text-right text-lg" style={{ color: '#006A4E' }}>
+                      {fmt(
+                        summaries.reduce((sum, s) => {
+                          const totalDough = s.rollWithSafety + s.breadWithSafety
+                          const dt = s.doughType.toLowerCase()
+                          let flourRatio = 0.64
+                          let whitePct = 1.0
+
+                          if (dt === 'grain' || dt === 'multigrain') {
+                            flourRatio = 0.62; whitePct = 0.40
+                          } else if (dt === 'wholemeal') {
+                            flourRatio = 0.62; whitePct = 0.50
+                          } else if (dt === 'white') {
+                            flourRatio = 0.64; whitePct = 1.0
+                          } else {
+                            return sum
+                          }
+                          return sum + (totalDough * flourRatio * whitePct)
+                        }, 0)
+                      )} kg
+                    </td>
+                  </tr>
+                  <tr className="bg-amber-50 font-bold">
+                    <td className="border px-4 py-2.5">TOTAL GRAIN FLOUR</td>
+                    <td className="border px-4 py-2.5" />
+                    <td className="border px-4 py-2.5" />
+                    <td colSpan={2} className="border px-4 py-2.5 text-right text-lg text-amber-700">
+                      {fmt(
+                        summaries.reduce((sum, s) => {
+                          const totalDough = s.rollWithSafety + s.breadWithSafety
+                          const dt = s.doughType.toLowerCase()
+                          if (dt === 'grain' || dt === 'multigrain') return sum + (totalDough * 0.62 * 0.60)
+                          return sum
+                        }, 0)
+                      )} kg
+                    </td>
+                  </tr>
+                  <tr className="bg-orange-50 font-bold">
+                    <td className="border px-4 py-2.5">TOTAL WHOLEMEAL FLOUR</td>
+                    <td className="border px-4 py-2.5" />
+                    <td className="border px-4 py-2.5" />
+                    <td colSpan={2} className="border px-4 py-2.5 text-right text-lg text-orange-700">
+                      {fmt(
+                        summaries.reduce((sum, s) => {
+                          const totalDough = s.rollWithSafety + s.breadWithSafety
+                          const dt = s.doughType.toLowerCase()
+                          if (dt === 'wholemeal') return sum + (totalDough * 0.62 * 0.50)
+                          return sum
+                        }, 0)
+                      )} kg
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
         </div>
       )}
     </div>
