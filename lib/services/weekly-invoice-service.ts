@@ -113,7 +113,15 @@ export async function generateWeeklyInvoice(
     .neq('status', 'cancelled')
     .order('delivery_date', { ascending: true })
 
-  if (oErr) throw new Error(oErr.message)
+    if (oErr) throw new Error(oErr.message)
+
+  // Check if a weekly invoice already exists for this customer+week (needed for filter)
+  const { data: existing } = await supabase
+    .from('weekly_invoices')
+    .select('id, invoice_number, status')
+    .eq('customer_id', customerId)
+    .eq('week_start',  weekStart)
+    .maybeSingle()
 
   // Filter: include orders that are pending/confirmed OR already part of this weekly invoice
   const orders = (allWeekOrders ?? []).filter(o => {
