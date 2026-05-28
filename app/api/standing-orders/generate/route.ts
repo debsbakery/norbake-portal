@@ -305,21 +305,7 @@ function getWeekDeliveryDate(deliveryDay: string, weekOffset: number = 1): Date 
   return result;
 }
 
-  // Brisbane time so we don't get UTC-shifted into wrong day
-  const ausNow = new Date(
-    new Date().toLocaleString('en-US', { timeZone: 'Australia/Brisbane' })
-  );
-  const currentIndex = ausNow.getDay();
-
-  // Find NEXT week's Sunday (start of next week)
-  // If today is Sunday → next Sunday = 7 days away
-  // Otherwise → days remaining until next Sunday
-  const daysUntilNextSunday = currentIndex === 0 ? 7 : 7 - currentIndex;
-
-  const result = new Date(ausNow);
-  result.setDate(ausNow.getDate() + daysUntilNextSunday + targetIndex);
-  return result;
-}
+ 
 
 // ── Info endpoint ─────────────────────────────────────────────────
 export async function GET() {
