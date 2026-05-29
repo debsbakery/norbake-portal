@@ -3,7 +3,26 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+async function generateFingerprint(): Promise<string> {
+  const components = [
+    navigator.userAgent,
+    navigator.language,
+    screen.width + 'x' + screen.height,
+    screen.colorDepth,
+    new Date().getTimezoneOffset(),
+    navigator.hardwareConcurrency ?? '',
+    (navigator as any).deviceMemory ?? '',
+  ].join('|')
 
+  // Simple hash
+  let hash = 0
+  for (let i = 0; i < components.length; i++) {
+    const char = components.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash
+  }
+  return Math.abs(hash).toString(36)
+}
 function ClockPageContent() {
   const searchParams = useSearchParams()
   const token        = searchParams.get('token') ?? ''
@@ -13,6 +32,7 @@ function ClockPageContent() {
   const [mode,      setMode]      = useState<'in'|'out'>('in')
   const [location,  setLocation]  = useState<any>(null)
   const [gpsCoords, setGpsCoords] = useState<{lat:number;lng:number}|null>(null)
+ const [deviceFingerprint, setDeviceFingerprint] = useState<string>('')
   const [gpsError,  setGpsError]  = useState<string|null>(null)
   const [loading,   setLoading]   = useState(false)
   const [result,    setResult]    = useState<any>(null)
@@ -31,6 +51,9 @@ function ClockPageContent() {
   useEffect(() => {
     if (!token) {
       setStep('error')
+      // Generate device fingerprint
+const fp = await generateFingerprint()
+setDeviceFingerprint(fp)
       setErrorMsg('Invalid QR code — please scan again.')
       return
     }
