@@ -52,18 +52,19 @@ function ClockPageContent() {
     if (!token) {
       setStep('error')
       // Generate device fingerprint
-const fp = await generateFingerprint()
-setDeviceFingerprint(fp)
       setErrorMsg('Invalid QR code — please scan again.')
       return
     }
     fetch(`/api/clock/qr?token=${encodeURIComponent(token)}`)
       .then(r => r.json())
-      .then(data => {
-        if (data.valid) {
-          setLocation(data.location)
-          setStep('pin')
-          navigator.geolocation?.getCurrentPosition(
+      .then(async data => {
+  if (data.valid) {
+    setLocation(data.location)
+    setStep('pin')
+    // Generate device fingerprint
+    const fp = await generateFingerprint()
+    setDeviceFingerprint(fp)
+    navigator.geolocation?.getCurrentPosition(
             pos => setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
             ()  => setGpsError('GPS unavailable — clock-in will be flagged'),
             { timeout: 8000, enableHighAccuracy: true }
@@ -90,12 +91,13 @@ setDeviceFingerprint(fp)
       const res  = await fetch(endpoint, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          pin:   currentPin,
-          token,
-          lat:   gpsCoords?.lat ?? null,
-          lng:   gpsCoords?.lng ?? null,
-        }),
+       body: JSON.stringify({
+  pin:   currentPin,
+  token,
+  lat:   gpsCoords?.lat ?? null,
+  lng:   gpsCoords?.lng ?? null,
+  device_fingerprint: deviceFingerprint || null,
+}),
       })
       const data = await res.json()
 
