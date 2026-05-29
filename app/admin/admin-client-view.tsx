@@ -72,7 +72,6 @@ function getWeekOptions() {
   }
   return options
 }
-const weekOptions = getWeekOptions()
   function toggleDay(day: string) {
     setSkippedDays(prev =>
       prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
