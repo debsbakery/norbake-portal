@@ -57,14 +57,14 @@ function getWeekOptions() {
   const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
   const currentDay = now.getDay()
   const options: Array<{ label: string; offset: number; start: string; end: string }> = []
-  for (let weekOffset = 1; weekOffset <= 3; weekOffset++) {
-    const daysUntilNextSunday = currentDay === 0 ? 7 : 7 - currentDay
+ for (let weekOffset = 0; weekOffset <= 3; weekOffset++) {
+    const daysUntilSunday = currentDay === 0 ? 0 : 7 - currentDay
     const weekStart = new Date(now)
-    weekStart.setDate(now.getDate() + daysUntilNextSunday + (weekOffset - 1) * 7)
+    weekStart.setDate(now.getDate() + daysUntilSunday + weekOffset * 7)
     const weekEnd = new Date(weekStart)
     weekEnd.setDate(weekStart.getDate() + 6)
     options.push({
-      label: weekOffset === 1 ? 'Next Week' : weekOffset === 2 ? 'Week After Next' : '3 Weeks Out',
+label: weekOffset === 0 ? 'This Week' : weekOffset === 1 ? 'Next Week' : weekOffset === 2 ? 'Week After Next' : '3 Weeks Out',
       offset: weekOffset,
       start: weekStart.toISOString().split('T')[0],
       end: weekEnd.toISOString().split('T')[0],
@@ -154,13 +154,15 @@ body:    JSON.stringify({ skip_days: skippedDays, week_offset: selectedWeek }),
 <div className="mb-4">
   <p className="text-sm font-medium text-gray-700 mb-2">Select Week</p>
   <div className="flex flex-col gap-2">
-    {weekOptions.map(option => (
+     {weekOptions.map(option => (
       <button
         key={option.offset}
         onClick={() => { setSelectedWeek(option.offset); setSoResult(null) }}
         className={`px-3 py-2.5 rounded-lg border-2 text-left text-sm transition-all ${
           selectedWeek === option.offset
             ? 'border-blue-500 bg-blue-50 text-blue-800 font-semibold'
+            : option.offset === 0
+            ? 'border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-400'
             : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
         }`}
       >
