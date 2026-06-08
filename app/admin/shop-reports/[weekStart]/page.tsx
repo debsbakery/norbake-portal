@@ -305,9 +305,16 @@ export default function WeeklyShopReport() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-3 mb-4 no-print">
-        <h1 className="text-2xl font-bold text-gray-900">Shop Reports</h1>
+    {/* Header */}
+<div className="flex flex-wrap items-center gap-3 mb-4 no-print">
+  <a
+    href="/admin"
+    className="flex items-center gap-1 text-sm hover:opacity-80"
+    style={{ color: '#CE1126' }}
+  >
+    ← Back to Admin
+  </a>
+  <h1 className="text-2xl font-bold text-gray-900">Shop Reports</h1>
         <div className="flex items-center gap-2 ml-4">
           <button
             onClick={() => router.push(`/admin/shop-reports/${formatWeekStart(prevWeek(weekStart))}`)}
@@ -554,8 +561,9 @@ export default function WeeklyShopReport() {
                       return (
                         <tr key={supplier} className={`border-b hover:bg-gray-50 ${idx % 2 === 0 ? '' : 'bg-gray-50/50'}`}>
                           <td className="px-3 py-1.5 font-medium text-gray-700 whitespace-nowrap">{supplier}</td>
-                          {DAYS.map(day => (
-                            <td key={day} className="px-1 py-1">
+                                         {DAYS.map(day => (
+                            <td key={day} className="px-1 py-1.5">
+
                                                         <input
                                 type="number" min="0" step="0.01"
                                 value={p[day] === 0 ? '' : p[day]}
