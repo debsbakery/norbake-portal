@@ -137,8 +137,7 @@ const router = useRouter()
   const [editForm, setEditForm] = useState<any>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
   const currentDate = weekDates[activeDay]
-  const todayStr = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' })).toISOString().split('T')[0]
-
+const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Perth' })
   const weekLabel = (() => {
     const s = new Date(weekStart + 'T00:00:00')
     const e = new Date(weekDates[6] + 'T00:00:00')
@@ -152,20 +151,19 @@ const router = useRouter()
     return shifts.filter(s => s.staff_id === staffId && s.work_date === date && s.effective_start)
       .sort((a, b) => (a.section ?? 1) - (b.section ?? 1))
   }
-  function actualTimeToSlot(timestamp: string): number {
-    const d = new Date(timestamp)
-    // Get Perth time using Intl formatter — reliable across all environments
-    const formatter = new Intl.DateTimeFormat('en-AU', {
-      timeZone: 'Australia/Perth',
-      hour: 'numeric',
-      minute: 'numeric',
-      hour12: false,
-    })
-    const parts = formatter.formatToParts(d)
-    const h = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10)
-    const m = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10)
-    return Math.max(0, Math.min(TOTAL_SLOTS, ((h * 60 + m) - HOUR_START * 60) / 15))
-  }
+ function actualTimeToSlot(timestamp: string): number {
+  const d = new Date(timestamp)
+  const formatter = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Perth',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  })
+  const parts = formatter.formatToParts(d)
+  const h = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10)
+  const m = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10)
+  return Math.max(0, Math.min(TOTAL_SLOTS, ((h * 60 + m) - HOUR_START * 60) / 15))
+}
   function isRosteredOff(staffId: string, date: string): boolean {
     return localEntries.some(e => e.staff_id === staffId && e.work_date === date && e.status === 'rostered_off')
   }
