@@ -40,10 +40,14 @@ interface Settings {
 }
 
 const SUPPLIERS = [
+  'Bega',
+  'Bidfood',
+  'TWD',
+  'TCW',
+  'Angliss',
+  "Deb's Bakery",
   'Coke',
-  'Kimberley Marketing',
-  'Coles',
-  'Bakery',
+  'Bou Samra',
   'Other',
 ]
 
@@ -167,7 +171,7 @@ export default function WeeklyShopReport() {
 
   function triggerAutoSave() {
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => { handleSave() }, 1500)
+    saveTimer.current = setTimeout(() => { handleSave() }, 15000)
   }
 
   function updateCell(shopId: string, date: string, field: DailyKey, val: string) {
@@ -305,7 +309,7 @@ export default function WeeklyShopReport() {
         </div>
       )}
 
-    {/* Header */}
+  {/* Header */}
 <div className="flex flex-wrap items-center gap-3 mb-4 no-print">
   <a
     href="/admin"
@@ -561,9 +565,8 @@ export default function WeeklyShopReport() {
                       return (
                         <tr key={supplier} className={`border-b hover:bg-gray-50 ${idx % 2 === 0 ? '' : 'bg-gray-50/50'}`}>
                           <td className="px-3 py-1.5 font-medium text-gray-700 whitespace-nowrap">{supplier}</td>
-                                         {DAYS.map(day => (
-                            <td key={day} className="px-1 py-1.5">
-
+                          {DAYS.map(day => (
+                            <td key={day} className="px-1 py-1">
                                                         <input
                                 type="number" min="0" step="0.01"
                                 value={p[day] === 0 ? '' : p[day]}
