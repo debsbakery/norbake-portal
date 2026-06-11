@@ -40,14 +40,14 @@ interface Settings {
 }
 
 const SUPPLIERS = [
-  'Bega',
-  'Bidfood',
-  'TWD',
-  'TCW',
-  'Angliss',
-  "Deb's Bakery",
+  'Coles',
+  'pearl coast ',
+  'woolies',
+  'other',
+  'other',
+  "Bakery",
   'Coke',
-  'Bou Samra',
+  'other',
   'Other',
 ]
 
