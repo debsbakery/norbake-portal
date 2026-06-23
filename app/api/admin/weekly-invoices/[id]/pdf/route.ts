@@ -34,11 +34,11 @@ export async function GET(request: NextRequest, { params }: Params) {
     const orderIds = (links ?? []).map((l: any) => l.order_id)
 
     // Fetch orders (need delivery_date for grouping)
-    const { data: orders } = await supabase
-      .from('orders')
-      .select('id, delivery_date, total_amount')
-      .in('id', orderIds)
-      .order('delivery_date', { ascending: true })
+   const { data: orders } = await supabase
+  .from('orders')
+  .select('id, delivery_date, total_amount, purchase_order_number')
+  .in('id', orderIds)
+  .order('delivery_date', { ascending: true })
 
     // Fetch all order items
     const { data: allItems } = await supabase
@@ -63,22 +63,23 @@ export async function GET(request: NextRequest, { params }: Params) {
     }
 
     // Group by delivery date
-    const dayMap = new Map<string, { items: OrderLineItem[]; total: number }>()
-    for (const o of (orders ?? [])) {
-      const date = o.delivery_date
-      if (!dayMap.has(date)) dayMap.set(date, { items: [], total: 0 })
-      const day = dayMap.get(date)!
-      day.total = Math.round((day.total + Number(o.total_amount || 0)) * 100) / 100
-      day.items.push(...(itemsByOrderId.get(o.id) ?? []))
-    }
+ const dayMap = new Map<string, { items: OrderLineItem[]; total: number; po_number: string | null }>()
+for (const o of (orders ?? [])) {
+  const date = o.delivery_date
+  if (!dayMap.has(date)) dayMap.set(date, { items: [], total: 0, po_number: (o as any).purchase_order_number ?? null })
+  const day = dayMap.get(date)!
+  day.total = Math.round((day.total + Number(o.total_amount || 0)) * 100) / 100
+  day.items.push(...(itemsByOrderId.get(o.id) ?? []))
+}
 
-    const days: DayGroup[] = Array.from(dayMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, data]) => ({
-        delivery_date: date,
-        items:         data.items,
-        day_total:     data.total,
-      }))
+  const days: DayGroup[] = Array.from(dayMap.entries())
+  .sort(([a], [b]) => a.localeCompare(b))
+  .map(([date, data]) => ({
+    delivery_date: date,
+    items:         data.items,
+    day_total:     data.total,
+    po_number:     data.po_number ?? null,
+  }))
 
     const bakery = {
       name:        process.env.RESEND_FROM_NAME ?? 'Norbake',
