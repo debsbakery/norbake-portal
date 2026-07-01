@@ -669,9 +669,9 @@ export default function DoughCalculator() {
                     } else if (dt === 'wholemeal') {
                       flourRatio = 0.62
                       flour1Label = 'Wholemeal Flour (50%)'
-                      flour1Pct = 0.50
+                      flour1Pct = 0.60
                       flour2Label = 'White Flour (50%)'
-                      flour2Pct = 0.50
+                      flour2Pct = 0.40
                     } else if (dt === 'white') {
                       flourRatio = 0.64
                       flour1Label = 'White Flour'
@@ -728,7 +728,7 @@ export default function DoughCalculator() {
                           if (dt === 'grain' || dt === 'multigrain') {
                             flourRatio = 0.62; whitePct = 0.40
                           } else if (dt === 'wholemeal') {
-                            flourRatio = 0.62; whitePct = 0.50
+                            flourRatio = 0.62; whitePct = 0.40
                           } else if (dt === 'white') {
                             flourRatio = 0.64; whitePct = 1.0
                           } else {
@@ -778,7 +778,7 @@ export default function DoughCalculator() {
                         summaries.reduce((sum, s) => {
                           const totalDough = s.rollWithSafety + s.breadWithSafety
                           const dt = s.doughType.toLowerCase()
-                          if (dt === 'wholemeal') return sum + (totalDough * 0.62 * 0.50)
+                          if (dt === 'wholemeal') return sum + (totalDough * 0.62 * 0.60)
                           return sum
                         }, 0)
                       )} kg
