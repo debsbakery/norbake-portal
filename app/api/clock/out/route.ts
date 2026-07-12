@@ -1,9 +1,13 @@
+// app/api/clock/out/route.ts
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { computeClockOut, computeTrustScore, haversineDistanceM } from '@/lib/services/time-snap-service'
 import { calculateShift } from '@/lib/services/shift-calculator'
+
+const PORTAL_TZ = 'Australia/Perth'
+const PORTAL_OFFSET = '+08:00'
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
@@ -14,12 +18,12 @@ export async function POST(request: NextRequest) {
 
   const supabase = createAdminClient()
   const nowUtc   = new Date()
-  const today    = nowUtc.toLocaleDateString('en-CA', { timeZone: 'Australia/Perth' })
+  const today    = nowUtc.toLocaleDateString('en-CA', { timeZone: PORTAL_TZ })
 
-  // Yesterday in Perth time — needed for split shifts clocking out after midnight
+  // Yesterday (portal-local) — needed for split shifts clocking out after midnight
   const yesterdayDate = new Date(nowUtc)
   yesterdayDate.setDate(yesterdayDate.getDate() - 1)
-  const yesterday = yesterdayDate.toLocaleDateString('en-CA', { timeZone: 'Australia/Perth' })
+  const yesterday = yesterdayDate.toLocaleDateString('en-CA', { timeZone: PORTAL_TZ })
 
   const { data: qr } = await supabase
     .from('staff_qr_codes')
@@ -107,9 +111,14 @@ export async function POST(request: NextRequest) {
   // Use roster work_date for scheduledEnd if available, else today
   const rosterDate = rosterEntry?.work_date ?? today
 
-  // FIX: Perth is +08:00 not +10:00
+  // ✅ Day type: ALWAYS derived from calendar date (server-TZ-proof).
+  // Roster day_type only trusted for public_holiday.
+  const dow = new Date(rosterDate + 'T00:00:00Z').getUTCDay()
+  const calendarDayType = dow === 0 ? 'sunday' : dow === 6 ? 'saturday' : 'normal'
+  const dayType = rosterEntry?.day_type === 'public_holiday' ? 'public_holiday' : calendarDayType
+
   const scheduledEnd = rosterEntry?.scheduled_end
-    ? new Date(`${rosterDate}T${rosterEntry.scheduled_end.slice(0, 5)}:00+08:00`)
+    ? new Date(`${rosterDate}T${rosterEntry.scheduled_end.slice(0, 5)}:00${PORTAL_OFFSET}`)
     : null
 
   const paidStart = new Date(clockInEvent.paid_time)
@@ -195,7 +204,7 @@ export async function POST(request: NextRequest) {
       effectiveEnd:             paidTime,
       breakMinutes:             effectiveBreakMinutes,
       employmentType:           staff.employment_type,
-      dayType:                  rosterEntry.day_type ?? 'normal',
+      dayType:                  dayType,   // ✅ calendar-derived
       baseHourlyRate:           rosterEntry.base_hourly_rate,
       saturdayRate:             rosterEntry.saturday_rate,
       sundayRate:               rosterEntry.sunday_rate,
@@ -220,7 +229,7 @@ export async function POST(request: NextRequest) {
       section:              rosterEntry.section ?? 1,
       department:           rosterEntry.department ?? staff.primary_department,
       employment_type:      staff.employment_type,
-      day_type:             rosterEntry.day_type ?? 'normal',
+      day_type:             dayType,   // ✅ calendar-derived
       clock_in_id:          clockInEvent.id,
       clock_out_id:         outEvent.id,
       effective_start:      paidStart.toISOString(),
@@ -262,7 +271,7 @@ export async function POST(request: NextRequest) {
       section:         1,
       department:      staff.primary_department ?? 'production',
       employment_type: staff.employment_type,
-      day_type:        'normal',
+      day_type:        dayType,   // ✅ was hardcoded 'normal' — Edoardo's Saturday bug
       clock_in_id:     clockInEvent.id,
       clock_out_id:    outEvent.id,
       effective_start: paidStart.toISOString(),
@@ -282,13 +291,13 @@ export async function POST(request: NextRequest) {
   ) / 100
 
   const rawOutStr = nowUtc.toLocaleTimeString('en-AU', {
-    timeZone: 'Australia/Perth', hour: 'numeric', minute: '2-digit', hour12: true,
+    timeZone: PORTAL_TZ, hour: 'numeric', minute: '2-digit', hour12: true,
   })
   const rawInStr = new Date(clockInEvent.paid_time).toLocaleTimeString('en-AU', {
-    timeZone: 'Australia/Perth', hour: 'numeric', minute: '2-digit', hour12: true,
+    timeZone: PORTAL_TZ, hour: 'numeric', minute: '2-digit', hour12: true,
   })
   const paidOutStr = paidTime.toLocaleTimeString('en-AU', {
-    timeZone: 'Australia/Perth', hour: 'numeric', minute: '2-digit', hour12: true,
+    timeZone: PORTAL_TZ, hour: 'numeric', minute: '2-digit', hour12: true,
   })
 
   return NextResponse.json({
