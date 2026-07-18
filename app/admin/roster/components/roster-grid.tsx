@@ -119,7 +119,7 @@ export default function RosterGrid({ staff, entries, shifts, weekStart, weekDate
 const router = useRouter()
   const [localEntries, setLocalEntries] = useState<RosterEntry[]>(entries)
   const [activeDay, setActiveDay] = useState<number>(() => {
-    const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' })).toISOString().split('T')[0]
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Brisbane' })
     const idx = weekDates.indexOf(today)
     return idx >= 0 ? idx : 1
   })
@@ -137,7 +137,7 @@ const router = useRouter()
   const [editForm, setEditForm] = useState<any>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
   const currentDate = weekDates[activeDay]
-const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Perth' })
+const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Brisbane' })
   const weekLabel = (() => {
     const s = new Date(weekStart + 'T00:00:00')
     const e = new Date(weekDates[6] + 'T00:00:00')
@@ -151,19 +151,20 @@ const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/P
     return shifts.filter(s => s.staff_id === staffId && s.work_date === date && s.effective_start)
       .sort((a, b) => (a.section ?? 1) - (b.section ?? 1))
   }
- function actualTimeToSlot(timestamp: string): number {
-  const d = new Date(timestamp)
-  const formatter = new Intl.DateTimeFormat('en-AU', {
-    timeZone: 'Australia/Perth',
-    hour: 'numeric',
-    minute: 'numeric',
-    hour12: false,
-  })
-  const parts = formatter.formatToParts(d)
-  const h = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10)
-  const m = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10)
-  return Math.max(0, Math.min(TOTAL_SLOTS, ((h * 60 + m) - HOUR_START * 60) / 15))
-}
+  function actualTimeToSlot(timestamp: string): number {
+    const d = new Date(timestamp)
+    // Get brisbane time using Intl formatter — reliable across all environments
+    const formatter = new Intl.DateTimeFormat('en-AU', {
+      timeZone: 'Australia/Brisbane',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+    })
+    const parts = formatter.formatToParts(d)
+    const h = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10)
+    const m = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10)
+    return Math.max(0, Math.min(TOTAL_SLOTS, ((h * 60 + m) - HOUR_START * 60) / 15))
+  }
   function isRosteredOff(staffId: string, date: string): boolean {
     return localEntries.some(e => e.staff_id === staffId && e.work_date === date && e.status === 'rostered_off')
   }
@@ -327,7 +328,8 @@ const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/P
   }
 
   function openEditModal(sm: StaffMember, entry: RosterEntry | null) {
-    const dow = new Date(currentDate + 'T00:00:00').getDay()
+const [ry, rm, rd] = currentDate.split('-').map(Number)
+const dow = new Date(Date.UTC(ry, rm - 1, rd)).getUTCDay()
     setEditEntry({ entry, staffId: sm.id, date: currentDate })
     setEditForm({ scheduled_start: entry?.scheduled_start ?? '06:00', scheduled_end: entry?.scheduled_end ?? '14:00', department: entry?.department ?? sm.primary_department, day_type: entry?.day_type ?? (dow === 0 ? 'sunday' : dow === 6 ? 'saturday' : 'normal'), public_holiday_name: entry?.public_holiday_name ?? '', manager_note: entry?.manager_note ?? '' })
   }
@@ -518,7 +520,7 @@ const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/P
 
                   {/* Current time line */}
                   {currentDate === todayStr && (() => {
-                    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' }))
+                    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Brisbane' }))
                     const ns = timeToSlot(`${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`)
                     return ns > 0 && ns < TOTAL_SLOTS ? (
                       <div className="absolute top-0 bottom-0 z-10 pointer-events-none" style={{ left: ns * SLOT_WIDTH - 1 }}>
@@ -582,7 +584,7 @@ const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/P
                           backgroundColor: barColor,
                           opacity: 0.9,
                         }}
-                        title={`Actual: ${shift.effective_start ? new Date(shift.effective_start).toLocaleTimeString('en-AU', { timeZone: 'Australia/Perth', hour: '2-digit', minute: '2-digit' }) : '?'} – ${shift.effective_end ? new Date(shift.effective_end).toLocaleTimeString('en-AU', { timeZone: 'Australia/Perth', hour: '2-digit', minute: '2-digit' }) : 'still in'}${isLate ? ` (${shift.arrived_late_min}min late)` : ''}`}
+                        title={`Actual: ${shift.effective_start ? new Date(shift.effective_start).toLocaleTimeString('en-AU', { timeZone: 'Australia/Brisbane', hour: '2-digit', minute: '2-digit' }) : '?'} – ${shift.effective_end ? new Date(shift.effective_end).toLocaleTimeString('en-AU', { timeZone: 'Australia/Perth', hour: '2-digit', minute: '2-digit' }) : 'still in'}${isLate ? ` (${shift.arrived_late_min}min late)` : ''}`}
                       />
                     )
                   })}
