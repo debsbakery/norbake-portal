@@ -123,14 +123,7 @@ export default function TemperatureCashPage() {
   }, [param])
 
   useEffect(() => { loadData() }, [loadData])
-// Add this useEffect in temperature page after the existing useEffects:
-useEffect(() => {
-  const handler = (e: BeforeUnloadEvent) => {
-    if (isDirty) { e.preventDefault(); e.returnValue = '' }
-  }
-  window.addEventListener('beforeunload', handler)
-  return () => window.removeEventListener('beforeunload', handler)
-}, [isDirty])
+
   function triggerAutoSave() {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => { handleSave() }, 2000)
@@ -393,8 +386,7 @@ useEffect(() => {
                         <input
                           type="number" min="0" step="0.01"
                           value={val === 0 ? '' : val}
-onChange={e => updateCashIn(date, e.target.value)}
-onBlur={handleSave}
+                          onChange={e => updateCashIn(date, e.target.value)}
                           placeholder="0.00"
                           className="w-full border rounded px-1.5 py-1 text-right text-sm
                             focus:outline-none focus:ring-1 focus:ring-emerald-400"
@@ -420,9 +412,7 @@ onBlur={handleSave}
                               <input
                                 type="number" min="0" step="0.01"
                                 value={item.amount === 0 ? '' : item.amount}
-onChange={e => updatePaidOut(date, idx, 'amount', e.target.value)}
-onBlur={handleSave}
-
+                                onChange={e => updatePaidOut(date, idx, 'amount', e.target.value)}
                                 placeholder="$0.00"
                                 className="w-full border rounded px-1 py-0.5 text-right text-xs
                                   focus:outline-none focus:ring-1 focus:ring-amber-400"
@@ -430,8 +420,7 @@ onBlur={handleSave}
                               <input
                                 type="text"
                                 value={item.reason}
-onChange={e => updatePaidOut(date, idx, 'reason', e.target.value)}
-onBlur={handleSave}
+                                onChange={e => updatePaidOut(date, idx, 'reason', e.target.value)}
                                 placeholder="Reason..."
                                 className="w-full border rounded px-1 py-0.5 text-xs text-gray-600
                                   focus:outline-none focus:ring-1 focus:ring-amber-400"
