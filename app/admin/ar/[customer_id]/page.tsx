@@ -40,36 +40,58 @@ async function getCustomerLedger(customerId: string) {
     .order('payment_date', { ascending: true })
 
   // Build invoice/order maps from invoice_numbers table
-  const invoiceIds = (arTxRaw ?? [])
-    .filter((t: any) => t.invoice_id)
-    .map((t: any) => t.invoice_id as string)
+const invoiceIds = (arTxRaw ?? [])
+  .filter((t: any) => t.invoice_id)
+  .map((t: any) => t.invoice_id as string)
 
-  let invoiceMap: Record<string, number> = {}
-  let orderIdMap: Record<string, string> = {}
+let invoiceMap: Record<string, number> = {}
+let orderIdMap: Record<string, string> = {}
 
-  if (invoiceIds.length > 0) {
-    const { data: invNums } = await supabase
-      .from('invoice_numbers')
-      .select('id, invoice_number, order_id')
-      .in('order_id', invoiceIds)
-    for (const inv of invNums ?? []) {
-      invoiceMap[inv.order_id] = inv.invoice_number
-      if (inv.order_id) orderIdMap[inv.order_id] = inv.order_id
+if (invoiceIds.length > 0) {
+  const { data: invNums } = await supabase
+    .from('invoice_numbers')
+    .select('id, invoice_number, order_id')
+    .in('order_id', invoiceIds)
+  for (const inv of invNums ?? []) {
+    invoiceMap[inv.order_id] = inv.invoice_number
+    if (inv.order_id) orderIdMap[inv.order_id] = inv.order_id
+  }
+}
+
+// Also fetch invoice_number from orders table as backup
+if (invoiceIds.length > 0) {
+  const { data: ordersWithInv } = await supabase
+    .from('orders')
+    .select('id, invoice_number')
+    .in('id', invoiceIds)
+  for (const o of ordersWithInv ?? []) {
+    if (o.invoice_number && !invoiceMap[o.id]) {
+      invoiceMap[o.id] = o.invoice_number
     }
   }
+}
 
-  // ✅ Also fetch invoice_number from orders table as backup
-  if (invoiceIds.length > 0) {
-    const { data: ordersWithInv } = await supabase
-      .from('orders')
-      .select('id, invoice_number')
-      .in('id', invoiceIds)
-    for (const o of ordersWithInv ?? []) {
-      if (o.invoice_number && !invoiceMap[o.id]) {
-        invoiceMap[o.id] = o.invoice_number
-      }
-    }
+// ── Weekly invoice number lookup ──────────────────────────────────────
+// AR transactions for weekly invoices have description = 'weekly:{uuid}'
+// and invoice_id = null, so we need a separate lookup by weekly invoice id
+const weeklyDescMap: Record<string, number> = {}
+for (const tx of arTxRaw ?? []) {
+  const desc = tx.description ?? ''
+  if (desc.startsWith('weekly:')) {
+    const weeklyId = desc.replace('weekly:', '')
+    if (weeklyId) weeklyDescMap[weeklyId] = 0  // placeholder, filled below
   }
+}
+const weeklyIds = Object.keys(weeklyDescMap)
+if (weeklyIds.length > 0) {
+  const { data: weeklyInvs } = await supabase
+    .from('weekly_invoices')
+    .select('id, invoice_number')
+    .in('id', weeklyIds)
+  for (const wi of weeklyInvs ?? []) {
+    if (wi.invoice_number) weeklyDescMap[wi.id] = wi.invoice_number
+  }
+}
 
   type LedgerEntry = {
     id: string
@@ -101,32 +123,40 @@ async function getCustomerLedger(customerId: string) {
     const amtPaid    = Number(tx.amount_paid || 0)
     const invoiceNum = tx.invoice_id ? invoiceMap[tx.invoice_id] : null
 
-    // ✅ Build description: prefer real invoice number over generic text
-    const rawDesc = tx.description || ''
-    const isGeneric =
-      rawDesc.toLowerCase().includes('edited') ||
-      rawDesc.toLowerCase().startsWith('invoice -') ||
-      rawDesc.toLowerCase().startsWith('credit invoice') ||
-      !rawDesc.match(/#\s*\d+/)
+  const rawDesc = tx.description || ''
 
-    let finalDescription: string
-    if (invoiceNum) {
-      const invStr  = `Invoice #${String(invoiceNum).padStart(6, '0')}`
-      const suffix  = rawDesc.toLowerCase().includes('edited')
-                        ? ' (edited)'
-                        : isCredit
-                          ? ' (credit)'
-                          : ''
-      const customer = rawDesc.includes(' - ')
-                        ? ' - ' + rawDesc.split(' - ').slice(1).join(' - ')
-                        : ''
-      finalDescription = isGeneric
-        ? invStr + suffix + customer
-        : rawDesc
-    } else {
-      finalDescription = rawDesc || (isCredit ? 'Credit' : 'Invoice')
-    }
+// Resolve weekly invoice descriptions
+let finalDescription: string
+if (rawDesc.startsWith('weekly:')) {
+  const weeklyId  = rawDesc.replace('weekly:', '')
+  const weeklyNum = weeklyDescMap[weeklyId]
+  finalDescription = weeklyNum
+    ? `Weekly Invoice #${String(weeklyNum).padStart(6, '0')}`
+    : `Weekly Invoice (${weeklyId.slice(0, 8).toUpperCase()})`
+} else {
+  const isGeneric =
+    rawDesc.toLowerCase().includes('edited') ||
+    rawDesc.toLowerCase().startsWith('invoice -') ||
+    rawDesc.toLowerCase().startsWith('credit invoice') ||
+    !rawDesc.match(/#\s*\d+/)
 
+  const invoiceNum = tx.invoice_id ? invoiceMap[tx.invoice_id] : null
+
+  if (invoiceNum) {
+    const invStr   = `Invoice #${String(invoiceNum).padStart(6, '0')}`
+    const suffix   = rawDesc.toLowerCase().includes('edited')
+                       ? ' (edited)'
+                       : isCredit
+                         ? ' (credit)'
+                         : ''
+    const customer = rawDesc.includes(' - ')
+                       ? ' - ' + rawDesc.split(' - ').slice(1).join(' - ')
+                       : ''
+    finalDescription = isGeneric ? invStr + suffix + customer : rawDesc
+  } else {
+    finalDescription = rawDesc || (isCredit ? 'Credit' : 'Invoice')
+  }
+}
     // ✅ Detect voided/zeroed invoices
     const isVoided = !isCredit && Math.abs(txAmount) < 0.01
 
