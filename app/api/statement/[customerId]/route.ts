@@ -61,9 +61,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .filter(t => t.invoice_id)
       .map(t => t.invoice_id as string)
 
-    let invoiceMap: Record<string, string> = {}
+       let invoiceMap: Record<string, string> = {}
     if (invoiceIds.length > 0) {
-      // Try invoice_numbers table by order_id first
       const { data: invNums } = await supabase
         .from('invoice_numbers')
         .select('order_id, invoice_number')
@@ -71,8 +70,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       for (const inv of invNums ?? []) {
         if (inv.order_id) invoiceMap[inv.order_id] = String(inv.invoice_number)
       }
-
-      // Fallback: orders.invoice_number
       const missing = invoiceIds.filter(id => !invoiceMap[id])
       if (missing.length > 0) {
         const { data: ordersWithInv } = await supabase
@@ -82,6 +79,26 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         for (const o of ordersWithInv ?? []) {
           if (o.invoice_number) invoiceMap[o.id] = String(o.invoice_number)
         }
+      }
+    }
+
+    // Weekly invoice number lookup
+    const weeklyDescMap: Record<string, string> = {}
+    for (const tx of transactions) {
+      const desc = tx.description ?? ''
+      if (desc.startsWith('weekly:')) {
+        const wid = desc.replace('weekly:', '')
+        if (wid) weeklyDescMap[wid] = ''
+      }
+    }
+    const weeklyIds = Object.keys(weeklyDescMap)
+    if (weeklyIds.length > 0) {
+      const { data: weeklyInvs } = await supabase
+        .from('weekly_invoices')
+        .select('id, invoice_number')
+        .in('id', weeklyIds)
+      for (const wi of weeklyInvs ?? []) {
+        if (wi.invoice_number) weeklyDescMap[wi.id] = String(wi.invoice_number)
       }
     }
 
@@ -126,12 +143,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const rawLines: RawLine[] = []
 
     for (const tx of transactions) {
-      const isCredit   = tx.type === 'credit'
-      const invoiceNum = tx.invoice_id ? invoiceMap[tx.invoice_id] : null
-      const reference  = invoiceNum
-        ? 'INV-' + String(invoiceNum).padStart(4, '0')
-        : String(tx.type ?? '').toUpperCase()
-
+           const isCredit = tx.type === 'credit'
       const txAmount = Number(tx.amount || 0)
       const amtPaid  = Number(tx.amount_paid || 0)
 
@@ -144,24 +156,36 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             : 'unpaid'
 
       // Build description matching ledger logic
-      const rawDesc   = tx.description || ''
-      const isGeneric = rawDesc.toLowerCase().includes('edited') ||
-        rawDesc.toLowerCase().startsWith('invoice -') ||
-        rawDesc.toLowerCase().startsWith('credit invoice') ||
-        !rawDesc.match(/#\s*\d+/)
-
+          const rawDesc = tx.description || ''
       let finalDescription: string
-      if (invoiceNum) {
-        const invStr = `Invoice #${String(invoiceNum).padStart(6, '0')}`
-        const suffix = rawDesc.toLowerCase().includes('edited')
-          ? ' (edited)'
-          : isCredit ? ' (credit)' : ''
-        const custPart = rawDesc.includes(' - ')
-          ? ' - ' + rawDesc.split(' - ').slice(1).join(' - ')
-          : ''
-        finalDescription = isGeneric ? invStr + suffix + custPart : rawDesc
+      let reference: string
+
+      if (rawDesc.startsWith('weekly:')) {
+        const wid = rawDesc.replace('weekly:', '')
+        const weeklyNum = weeklyDescMap[wid]
+        finalDescription = weeklyNum
+          ? `Weekly Invoice #${String(weeklyNum).padStart(6, '0')}`
+          : `Weekly Invoice (${wid.slice(0, 8).toUpperCase()})`
+        reference = weeklyNum
+          ? `INV-${String(weeklyNum).padStart(4, '0')}`
+          : 'WEEKLY'
       } else {
-        finalDescription = rawDesc || (isCredit ? 'Credit' : 'Invoice')
+        const invoiceNum = tx.invoice_id ? invoiceMap[tx.invoice_id] : null
+        reference = invoiceNum
+          ? 'INV-' + String(invoiceNum).padStart(4, '0')
+          : String(tx.type ?? '').toUpperCase()
+        const isGeneric = rawDesc.toLowerCase().includes('edited') ||
+          rawDesc.toLowerCase().startsWith('invoice -') ||
+          rawDesc.toLowerCase().startsWith('credit invoice') ||
+          !rawDesc.match(/#\s*\d+/)
+        if (invoiceNum) {
+          const invStr   = `Invoice #${String(invoiceNum).padStart(6, '0')}`
+          const suffix   = rawDesc.toLowerCase().includes('edited') ? ' (edited)' : isCredit ? ' (credit)' : ''
+          const custPart = rawDesc.includes(' - ') ? ' - ' + rawDesc.split(' - ').slice(1).join(' - ') : ''
+          finalDescription = isGeneric ? invStr + suffix + custPart : rawDesc
+        } else {
+          finalDescription = rawDesc || (isCredit ? 'Credit' : 'Invoice')
+        }
       }
 
       rawLines.push({
