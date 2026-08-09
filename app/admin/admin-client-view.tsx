@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import {
   Clock, Users, BarChart3, Package, RefreshCw, Truck,
   DollarSign, FileText, Thermometer, ShoppingCart, ChefHat, Receipt,
-  Copy, Play, ClipboardList, Printer, QrCode, Store, X, CalendarDays, Search, Lock,
+  Copy, Play, ClipboardList,AlertTriangle, Printer, QrCode, Store, X, CalendarDays, Search, Lock,
   CheckCircle,
 } from 'lucide-react'
 
@@ -321,6 +321,11 @@ body:    JSON.stringify({ skip_days: skippedDays, week_offset: selectedWeek }),
                 style={{ backgroundColor: '#1f2937' }}>
                 <DollarSign className="h-4 w-4" />AR Dashboard
               </a>
+              <a href="/admin/recalls"
+  className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
+  style={{ backgroundColor: '#b91c1c' }}>
+  <AlertTriangle className="h-4 w-4" />Recalls
+</a>
               {/* ✅ Invoice Status — added for Norbake */}
               <a href="/admin/invoice-status"
                 className="flex items-center gap-2 px-4 py-2 text-white rounded-md hover:opacity-90 shadow-md text-sm font-medium"
