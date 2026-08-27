@@ -62,7 +62,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // ? Look up role directly — no self-fetch which causes Vercel middleware timeout
+  // ? Look up role directly â€” no self-fetch which causes Vercel middleware timeout
   const admin = createAdminClient()
   const { data: roleData } = await admin
     .from('erp_user_roles')
@@ -90,7 +90,7 @@ export async function middleware(req: NextRequest) {
     if (rank(role) < rank('owner')) return deny()
   }
 
-  // staff_viewer — block mutations on staff API
+  // staff_viewer â€” block mutations on staff API
   if (matches(pathname, STAFF_ROUTES) && isAdminApi && rank(role) < rank('manager')) {
     const method = req.method.toUpperCase()
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return deny()

@@ -1,4 +1,4 @@
-﻿// app/api/clock/out/route.ts
+// app/api/clock/out/route.ts
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
