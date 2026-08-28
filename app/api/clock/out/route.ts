@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
   const { data: qr } = await supabase
     .from('staff_qr_codes')
-    .select('id, location_id, clock_locations(id, name, latitude, longitude, radius_metres)')
+    .select('id, location_id, staff_locations(id, name, latitude, longitude, radius_metres)')
     .eq('token', token)
     .eq('active', true)
     .maybeSingle()
