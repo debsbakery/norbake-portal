@@ -1,41 +1,15 @@
-export const runtime = 'nodejs'
+import { NextResponse, type NextRequest } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { createAdminClient } from '@/lib/supabase/admin'
-
-const MANAGER_ROUTES = [
-  '/admin/hours',
-  '/admin/payroll',
-  '/api/admin/shifts',
-  '/api/admin/payroll',
+const ADMIN_EMAILS = [
+  'orders@norbakebroome.com',
+  'admin@allstarsbakery.com',
+  'admin@norbakebroome.com',
 ]
-
-const STAFF_ROUTES = [
-  '/admin/staff',
-  '/api/admin/staff',
-]
-
-const VIEWER_ROUTES = [
-  '/admin/roster',
-  '/api/admin/roster',
-]
-
-function matches(pathname: string, patterns: string[]) {
-  return patterns.some(p => pathname === p || pathname.startsWith(p + '/'))
-}
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
-  const res = NextResponse.next()
-
-  if (pathname.startsWith('/clock') || pathname.startsWith('/api/clock')) {
-    return res
-  }
-
-  const isAdminPage = pathname.startsWith('/admin')
-  const isAdminApi  = pathname.startsWith('/api/admin')
-  if (!isAdminPage && !isAdminApi) return res
+  const res = NextResponse.next({ request: { headers: req.headers } })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -43,7 +17,7 @@ export async function middleware(req: NextRequest) {
     {
       cookies: {
         getAll: () => req.cookies.getAll(),
-        setAll: (cookiesToSet: { name: string; value: string; options: CookieOptions }[]) => {
+        setAll: (cookiesToSet) => {
           cookiesToSet.forEach(({ name, value, options }) =>
             res.cookies.set(name, value, options)
           )
@@ -53,49 +27,18 @@ export async function middleware(req: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
+  const isApi = pathname.startsWith('/api/admin')
 
   if (!user) {
-    if (isAdminApi) {
-      return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
-    }
-    const loginUrl = req.nextUrl.clone()
-    loginUrl.pathname = '/login'
-    loginUrl.searchParams.set('next', pathname)
-    return NextResponse.redirect(loginUrl)
+    return isApi
+      ? NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+      : NextResponse.redirect(new URL('/auth/login', req.url))
   }
 
-  // ? Look up role directly â€” no self-fetch which causes Vercel middleware timeout
-  const admin = createAdminClient()
-  const { data: roleData } = await admin
-    .from('erp_user_roles')
-    .select('role')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  const role = (roleData?.role ?? 'user') as string
-
-  const RANK: Record<string, number> = {
-    owner: 4, manager: 3, staff_viewer: 2, user: 1,
-  }
-  const rank = (r: string) => RANK[r] ?? 0
-
-  const deny = () => isAdminApi
-    ? NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    : NextResponse.redirect(new URL('/admin/unauthorised', req.url))
-
-  if (matches(pathname, MANAGER_ROUTES))  { if (rank(role) < rank('manager'))      return deny() }
-  if (matches(pathname, STAFF_ROUTES))    { if (rank(role) < rank('staff_viewer')) return deny() }
-  if (matches(pathname, VIEWER_ROUTES))   { if (rank(role) < rank('staff_viewer')) return deny() }
-
-  if (pathname.startsWith('/admin/settings/roles') ||
-      pathname.startsWith('/api/admin/settings/roles')) {
-    if (rank(role) < rank('owner')) return deny()
-  }
-
-  // staff_viewer â€” block mutations on staff API
-  if (matches(pathname, STAFF_ROUTES) && isAdminApi && rank(role) < rank('manager')) {
-    const method = req.method.toUpperCase()
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return deny()
+  if (!ADMIN_EMAILS.includes(user.email?.toLowerCase() ?? '')) {
+    return isApi
+      ? NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      : NextResponse.redirect(new URL('/admin/unauthorised', req.url))
   }
 
   return res
