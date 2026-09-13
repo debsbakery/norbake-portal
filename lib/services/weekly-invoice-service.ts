@@ -264,6 +264,8 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string): Promise<{
   purchase_order_number: o.purchase_order_number ?? null,
 }))
 
+  const liveTotal = Math.round(dayLines.reduce((s, l) => s + Number(l.total_amount || 0), 0) * 100) / 100
+
   const bakery = {
     name:        process.env.RESEND_FROM_NAME    ?? process.env.BAKERY_NAME    ?? '',
     email:       process.env.RESEND_FROM_EMAIL   ?? process.env.BAKERY_EMAIL   ?? '',
@@ -286,7 +288,7 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string): Promise<{
     weekStart:     weekly.week_start,
     weekEnd:       weekly.week_end,
     dueDate:       weekly.due_date ?? weekly.week_end,
-    totalAmount:   Number(weekly.total_amount),
+    totalAmount:   liveTotal,
     gstAmount:     Number(weekly.gst_amount),
     customerName:  customer.business_name ?? customer.email,
     isRevised,
@@ -304,7 +306,7 @@ export async function sendWeeklyInvoiceEmail(weeklyInvoiceId: string): Promise<{
         invoice_number: weekly.invoice_number,
         week_start:     weekly.week_start,
         week_end:       weekly.week_end,
-        total_amount:   Number(weekly.total_amount),
+        total_amount:   liveTotal,
         gst_amount:     Number(weekly.gst_amount),
         issued_at:      weekly.issued_at,
         revised_at:     weekly.revised_at,
