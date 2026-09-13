@@ -467,12 +467,16 @@ export async function generateWeeklyInvoice(
     weeklyId      = existing.id
     invoiceNumber = existing.invoice_number ?? 0
 
+    const revisedDue = new Date()
+    revisedDue.setDate(revisedDue.getDate() + (customer.payment_terms ?? 14))
+    const revisedDueStr = revisedDue.toISOString().split('T')[0]
+
     await supabase.from('weekly_invoices').update({
       total_amount:  totalAmount,
       gst_amount:    gstAmount,
       status:        'revised',
       revised_at:    new Date().toISOString(),
-      due_date:      dueDateStr,
+      due_date:      revisedDueStr,
     }).eq('id', existing.id)
 
     await supabase.from('weekly_invoice_orders').delete().eq('weekly_invoice_id', existing.id)
