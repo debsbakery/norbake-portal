@@ -159,9 +159,17 @@ export default function ResendInvoicesView({
         Back to Reports
       </a>
 
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Resend Invoices</h1>
-        <p className="text-gray-500 mt-1">Resend invoice emails or download PDFs by date range</p>
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold">Resend Invoices</h1>
+          <p className="text-gray-500 mt-1">Resend invoice emails or download PDFs by date range</p>
+        </div>
+        <a
+          href="/admin/resend-invoices/overdue"
+          className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
+        >
+          Overdue invoices
+        </a>
       </div>
 
       {/* Filters */}

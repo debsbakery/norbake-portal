@@ -102,30 +102,39 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // Opening balance BEFORE period
+    // Opening balance BEFORE period.
+    //
+    // Derived from invoice settlement state, NOT from the payments table.
+    // Settlements recorded before the payments table existed set amount_paid
+    // and paid_date without creating a payments row, so subtracting payment
+    // rows alone leaves those invoices inflating the opening balance forever.
+    //
+    // An invoice carries into the opening balance unless it was settled
+    // before the period started. Anything settled on/after startDate shows
+    // as a payment line inside the period instead.
     let openingBalance = 0
     if (startDate) {
       const { data: priorTxRaw } = await supabase
         .from('ar_transactions')
-        .select('amount, type')
+        .select('type, amount, amount_paid, paid_date')
         .eq('customer_id', customerId)
         .lt('created_at', startDate)
 
-      const priorInvoiceTotal = (priorTxRaw ?? []).reduce((sum, tx) => {
-        return sum + (tx.type === 'credit' ? -Number(tx.amount) : Number(tx.amount))
+      openingBalance = (priorTxRaw ?? []).reduce((sum, tx) => {
+        const amount = Number(tx.amount || 0)
+        const paid   = Number(tx.amount_paid || 0)
+
+        const settledBeforePeriod =
+          tx.paid_date != null && String(tx.paid_date) < startDate
+
+        if (settledBeforePeriod) return sum
+
+        if (tx.type === 'credit') {
+          return sum - Math.max(amount - paid, 0)
+        }
+
+        return sum + amount
       }, 0)
-
-      const { data: priorPmtRaw } = await supabase
-        .from('payments')
-        .select('amount')
-        .eq('customer_id', customerId)
-        .lt('payment_date', startDate)
-
-      const priorPaymentTotal = (priorPmtRaw ?? []).reduce(
-        (sum, p) => sum + Number(p.amount), 0
-      )
-
-      openingBalance = priorInvoiceTotal - priorPaymentTotal
     }
 
     // Merge lines
@@ -249,8 +258,6 @@ let ageQuery = supabase
   .eq('customer_id', customerId)
   .eq('type', 'invoice')
   .lte('created_at', endDate + 'T23:59:59')
-
-if (startDate) ageQuery = ageQuery.gte('created_at', startDate)
 
 const { data: allInvoices } = await ageQuery
 
