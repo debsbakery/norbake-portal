@@ -1,4 +1,4 @@
-﻿{
+{
   "crons": [
     { "path": "/api/cron/ar-aging",                     "schedule": "0 15 * * *" },
     { "path": "/api/cron/generate-weekly-invoices",     "schedule": "0 20 * * *" },
